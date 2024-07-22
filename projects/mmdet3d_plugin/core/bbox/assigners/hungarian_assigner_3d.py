@@ -1,10 +1,8 @@
 import torch
 
-from mmdet.core.bbox.builder import BBOX_ASSIGNERS
-from mmdet.core.bbox.assigners import AssignResult
-from mmdet.core.bbox.assigners import BaseAssigner
-from mmdet.core.bbox.match_costs import build_match_cost
-from mmdet.models.utils.transformer import inverse_sigmoid
+from mmdet3d.models.task_modules.builder import BBOX_ASSIGNERS
+from mmdet.models.task_modules import AssignResult, BaseAssigner
+from mmdet.registry import TASK_UTILS
 from projects.mmdet3d_plugin.core.bbox.util import normalize_bbox
 
 try:
@@ -44,9 +42,9 @@ class HungarianAssigner3D(BaseAssigner):
                  reg_cost=dict(type='BBoxL1Cost', weight=1.0),
                  iou_cost=dict(type='IoUCost', weight=0.0),
                  pc_range=None):
-        self.cls_cost = build_match_cost(cls_cost)
-        self.reg_cost = build_match_cost(reg_cost)
-        self.iou_cost = build_match_cost(iou_cost)
+        self.cls_cost = TASK_UTILS.build(cls_cost)
+        self.reg_cost = TASK_UTILS.build(reg_cost)
+        self.iou_cost = TASK_UTILS.build(iou_cost)
         self.pc_range = pc_range
 
     def assign(self,

@@ -13,22 +13,22 @@ import os
 import time
 import torch
 import warnings
-from mmcv import Config, DictAction
-from mmcv.runner import get_dist_info, init_dist
+from mmengine import Config, DictAction
+from mmengine.dist import get_dist_info, init_dist
+from mmengine.logging import MMLogger
 from os import path as osp
 
 from mmdet import __version__ as mmdet_version
 from mmdet3d import __version__ as mmdet3d_version
 #from mmdet3d.apis import train_model
 
-from mmdet3d.datasets import build_dataset
-from mmdet3d.models import build_model
-from mmdet3d.utils import collect_env, get_root_logger
-from mmdet.apis import set_random_seed
+from mmdet3d.registry import DATASETS, MODELS
+from mmdet3d.utils import collect_env
+from mmengine.runner import set_random_seed
 from mmseg import __version__ as mmseg_version
 
-from mmcv.utils import TORCH_VERSION, digit_version
-
+from mmengine.utils.dl_utils import TORCH_VERSION
+from mmengine.utils import digit_version
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a detector')
@@ -184,8 +184,8 @@ def main():
         logger_name = 'mmseg'
     else:
         logger_name = 'mmdet'
-    logger = get_root_logger(
-        log_file=log_file, log_level=cfg.log_level, name=logger_name)
+    logger = MMLogger(
+        log_file=log_file, log_level=cfg.log_level, logger_name=logger_name)
 
     # init the meta dict to record some important information such as
     # environment info and seed, which will be logged
@@ -212,14 +212,14 @@ def main():
     meta['seed'] = args.seed
     meta['exp_name'] = osp.basename(args.config)
 
-    model = build_model(
+    model = MODELS.build(
         cfg.model,
         train_cfg=cfg.get('train_cfg'),
         test_cfg=cfg.get('test_cfg'))
     model.init_weights()
 
     logger.info(f'Model:\n{model}')
-    datasets = [build_dataset(cfg.data.train)]
+    datasets = [DATASETS.build(cfg.data.train)]
     if len(cfg.workflow) == 2:
         val_dataset = copy.deepcopy(cfg.data.val)
         # in case we use a dataset wrapper
@@ -231,7 +231,7 @@ def main():
         # which do not affect AP/AR calculation later
         # refer to https://mmdetection3d.readthedocs.io/en/latest/tutorials/customize_runtime.html#customize-workflow  # noqa
         val_dataset.test_mode = False
-        datasets.append(build_dataset(val_dataset))
+        datasets.append(DATASETS.build(val_dataset))
     if cfg.checkpoint_config is not None:
         # save mmdet version, config file content and class names in
         # checkpoints as meta data
