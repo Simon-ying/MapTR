@@ -1,11 +1,13 @@
-from setuptools import find_packages, setup
-
+# Copyright (c) OpenMMLab. All rights reserved.
 import os
+import platform
 import shutil
 import sys
-import torch
 import warnings
 from os import path as osp
+from setuptools import find_packages, setup
+
+import torch
 from torch.utils.cpp_extension import (BuildExtension, CppExtension,
                                        CUDAExtension)
 
@@ -22,13 +24,7 @@ version_file = 'mmdet3d/version.py'
 def get_version():
     with open(version_file, 'r') as f:
         exec(compile(f.read(), version_file, 'exec'))
-    import sys
-
-    # return short version for sdist
-    if 'sdist' in sys.argv or 'bdist_wheel' in sys.argv:
-        return locals()['short_version']
-    else:
-        return locals()['__version__']
+    return locals()['__version__']
 
 
 def make_cuda_ext(name,
@@ -150,7 +146,11 @@ def add_mim_extention():
     # parse installment mode
     if 'develop' in sys.argv:
         # installed by `pip install -e .`
-        mode = 'symlink'
+        if platform.system() == 'Windows':
+            # set `copy` mode here since symlink fails on Windows.
+            mode = 'copy'
+        else:
+            mode = 'symlink'
     elif 'sdist' in sys.argv or 'bdist_wheel' in sys.argv:
         # installed by `pip install .`
         # or create source distribution by `python setup.py sdist`
@@ -158,7 +158,9 @@ def add_mim_extention():
     else:
         return
 
-    filenames = ['tools', 'configs', 'model-index.yml']
+    filenames = [
+        'tools', 'configs', 'demo', 'model-index.yml', 'dataset-index.yml'
+    ]
     repo_path = osp.dirname(__file__)
     mim_path = osp.join(repo_path, 'mmdet3d', '.mim')
     os.makedirs(mim_path, exist_ok=True)
@@ -200,137 +202,26 @@ if __name__ == '__main__':
         author_email='zwwdev@gmail.com',
         keywords='computer vision, 3D object detection',
         url='https://github.com/open-mmlab/mmdetection3d',
-        packages=find_packages(),
+        packages=find_packages(exclude=('configs', 'tools', 'demo')),
         include_package_data=True,
-        package_data={'mmdet3d.ops': ['*/*.so']},
         classifiers=[
-            'Development Status :: 4 - Beta',
+            'Development Status :: 5 - Production/Stable',
             'License :: OSI Approved :: Apache Software License',
             'Operating System :: OS Independent',
             'Programming Language :: Python :: 3',
-            'Programming Language :: Python :: 3.6',
             'Programming Language :: Python :: 3.7',
+            'Programming Language :: Python :: 3.8',
+            'Programming Language :: Python :: 3.9',
         ],
         license='Apache License 2.0',
-        setup_requires=parse_requirements('requirements/build.txt'),
-        tests_require=parse_requirements('requirements/tests.txt'),
         install_requires=parse_requirements('requirements/runtime.txt'),
         extras_require={
             'all': parse_requirements('requirements.txt'),
             'tests': parse_requirements('requirements/tests.txt'),
             'build': parse_requirements('requirements/build.txt'),
             'optional': parse_requirements('requirements/optional.txt'),
+            'mim': parse_requirements('requirements/mminstall.txt'),
         },
-        ext_modules=[
-            make_cuda_ext(
-                name='sparse_conv_ext',
-                module='mmdet3d.ops.spconv',
-                extra_include_path=[
-                    # PyTorch 1.5 uses ninjia, which requires absolute path
-                    # of included files, relative path will cause failure.
-                    os.path.abspath(
-                        os.path.join(*'mmdet3d.ops.spconv'.split('.'),
-                                     'include/'))
-                ],
-                sources=[
-                    'src/all.cc',
-                    'src/reordering.cc',
-                    'src/reordering_cuda.cu',
-                    'src/indice.cc',
-                    'src/indice_cuda.cu',
-                    'src/maxpool.cc',
-                    'src/maxpool_cuda.cu',
-                ],
-                extra_args=['-w', '-std=c++14']),
-            make_cuda_ext(
-                name='iou3d_cuda',
-                module='mmdet3d.ops.iou3d',
-                sources=[
-                    'src/iou3d.cpp',
-                    'src/iou3d_kernel.cu',
-                ]),
-            make_cuda_ext(
-                name="bev_pool_ext",
-                module="mmdet3d.ops.bev_pool",
-                sources=[
-                    "src/bev_pool.cpp",
-                    "src/bev_pool_cuda.cu",
-                ],
-            ),
-            make_cuda_ext(
-                name='voxel_layer',
-                module='mmdet3d.ops.voxel',
-                sources=[
-                    'src/voxelization.cpp',
-                    'src/scatter_points_cpu.cpp',
-                    'src/scatter_points_cuda.cu',
-                    'src/voxelization_cpu.cpp',
-                    'src/voxelization_cuda.cu',
-                ]),
-            make_cuda_ext(
-                name='roiaware_pool3d_ext',
-                module='mmdet3d.ops.roiaware_pool3d',
-                sources=[
-                    'src/roiaware_pool3d.cpp',
-                    'src/points_in_boxes_cpu.cpp',
-                ],
-                sources_cuda=[
-                    'src/roiaware_pool3d_kernel.cu',
-                    'src/points_in_boxes_cuda.cu',
-                ]),
-            make_cuda_ext(
-                name='ball_query_ext',
-                module='mmdet3d.ops.ball_query',
-                sources=['src/ball_query.cpp'],
-                sources_cuda=['src/ball_query_cuda.cu']),
-            make_cuda_ext(
-                name='knn_ext',
-                module='mmdet3d.ops.knn',
-                sources=['src/knn.cpp'],
-                sources_cuda=['src/knn_cuda.cu']),
-            make_cuda_ext(
-                name='assign_score_withk_ext',
-                module='mmdet3d.ops.paconv',
-                sources=['src/assign_score_withk.cpp'],
-                sources_cuda=['src/assign_score_withk_cuda.cu']),
-            make_cuda_ext(
-                name='group_points_ext',
-                module='mmdet3d.ops.group_points',
-                sources=['src/group_points.cpp'],
-                sources_cuda=['src/group_points_cuda.cu']),
-            make_cuda_ext(
-                name='interpolate_ext',
-                module='mmdet3d.ops.interpolate',
-                sources=['src/interpolate.cpp'],
-                sources_cuda=[
-                    'src/three_interpolate_cuda.cu', 'src/three_nn_cuda.cu'
-                ]),
-            make_cuda_ext(
-                name='furthest_point_sample_ext',
-                module='mmdet3d.ops.furthest_point_sample',
-                sources=['src/furthest_point_sample.cpp'],
-                sources_cuda=['src/furthest_point_sample_cuda.cu']),
-            make_cuda_ext(
-                name='gather_points_ext',
-                module='mmdet3d.ops.gather_points',
-                sources=['src/gather_points.cpp'],
-                sources_cuda=['src/gather_points_cuda.cu']),
-            make_cuda_ext(
-                name="bev_pool_ext",
-                module="mmdet3d.ops.bev_pool",
-                sources=[
-                    "src/bev_pool.cpp",
-                    "src/bev_pool_cuda.cu",
-                ],
-            ),
-            make_cuda_ext(
-                name='bev_pool_v2_ext',
-                module='mmdet3d.ops.bev_pool_v2',
-                sources=[
-                    'src/bev_pool.cpp',
-                    'src/bev_pool_cuda.cu',
-                ],
-            ),
-        ],
+        ext_modules=[],
         cmdclass={'build_ext': BuildExtension},
         zip_safe=False)
