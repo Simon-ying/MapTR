@@ -1,17 +1,16 @@
 import copy
 
 import numpy as np
-from mmdet.datasets import DATASETS
+from mmengine.registry import DATASETS
 from mmdet3d.datasets import NuScenesDataset
-import mmcv
+from mmengine.fileio import load
 from os import path as osp
-from mmdet.datasets import DATASETS
 import torch
 import numpy as np
 from nuscenes.eval.common.utils import quaternion_yaw, Quaternion
 from .nuscnes_eval import NuScenesEval_custom
 from projects.mmdet3d_plugin.models.utils.visual import save_tensor
-from mmcv.parallel import DataContainer as DC
+from projects.mmdet3d_plugin.parallel.data_container import DataContainer as DC
 import random
 
 
@@ -239,7 +238,7 @@ class CustomNuScenesDataset(NuScenesDataset):
         )
         self.nusc_eval.main(plot_examples=0, render_curves=False)
         # record metrics
-        metrics = mmcv.load(osp.join(output_dir, 'metrics_summary.json'))
+        metrics = load(osp.join(output_dir, 'metrics_summary.json'))
         detail = dict()
         metric_prefix = f'{result_name}_NuScenes'
         for name in self.CLASSES:

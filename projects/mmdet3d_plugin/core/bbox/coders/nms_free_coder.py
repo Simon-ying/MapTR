@@ -1,10 +1,10 @@
 import torch
 
-from mmdet.core.bbox import BaseBBoxCoder
-from mmdet.core.bbox.builder import BBOX_CODERS
+from mmdet.models.task_modules.coders import BaseBBoxCoder
+from mmdet.models.task_modules import BBOX_CODERS
 from projects.mmdet3d_plugin.core.bbox.util import denormalize_bbox
 import numpy as np
-from mmdet.core.bbox.transforms import bbox_xyxy_to_cxcywh, bbox_cxcywh_to_xyxy
+from mmdet.structures.bbox.transforms import bbox_xyxy_to_cxcywh, bbox_cxcywh_to_xyxy
 
 def denormalize_3d_pts(pts, pc_range):
     new_pts = pts.clone()

@@ -1,0 +1,10 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../../usr/local/lib/miniconda3/envs/maptr"
+		}
+	]
+}
