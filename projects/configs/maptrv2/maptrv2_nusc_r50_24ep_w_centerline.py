@@ -248,13 +248,16 @@ test_pipeline = [
         ])
 ]
 
-data = dict(
-    samples_per_gpu=1,
-    workers_per_gpu=4, # TODO
-    train=dict(
+train_dataloader = dict(
+    batch_size=1,
+    num_workers=4,
+    persistent_workers=True,
+    sampler=dict(type='DistributedGroupSampler', shuffle=True),
+    batch_sampler=dict(type='AspectRatioBatchSampler'),
+    dataset=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file=data_root + 'nuscenes_map_infos_temporal_train.pkl',
+        ann_file='nuscenes_map_infos_temporal_train.pkl',
         pipeline=train_pipeline,
         classes=class_names,
         modality=input_modality,
@@ -270,24 +273,45 @@ data = dict(
         queue_length=queue_length,
         # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
         # and box_type_3d='Depth' in sunrgbd and scannet dataset.
-        box_type_3d='LiDAR'),
-    val=dict(
+        box_type_3d='LiDAR'
+    )
+)
+
+val_dataloader = dict(
+    batch_size=1,
+    num_workers=4,
+    persistent_workers=True,
+    sampler=dict(type='DistributedGroupSampler', shuffle=True),
+    batch_sampler=dict(type='AspectRatioBatchSampler'),
+    dataset=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file=data_root + 'nuscenes_map_infos_temporal_val.pkl',
-        map_ann_file=data_root + 'nuscenes_map_anns_val.json',
-        pipeline=test_pipeline,  bev_size=(bev_h_, bev_w_),
+        ann_file='nuscenes_map_infos_temporal_val.pkl',
+        map_ann_file='nuscenes_map_anns_val.json',
+        pipeline=test_pipeline,
+        bev_size=(bev_h_, bev_w_),
         pc_range=point_cloud_range,
         fixed_ptsnum_per_line=fixed_ptsnum_per_gt_line,
         eval_use_same_gt_sample_num_flag=eval_use_same_gt_sample_num_flag,
         padding_value=-10000,
         map_classes=map_classes,
-        classes=class_names, modality=input_modality, samples_per_gpu=1),
-    test=dict(
+        classes=class_names,
+        modality=input_modality,
+        samples_per_gpu=1
+    )
+)
+
+test_dataloader = dict(
+    batch_size=1,
+    num_workers=4,
+    persistent_workers=True,
+    sampler=dict(type='DistributedGroupSampler', shuffle=True),
+    batch_sampler=dict(type='AspectRatioBatchSampler'),
+    dataset=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file=data_root + 'nuscenes_map_infos_temporal_val.pkl',
-        map_ann_file=data_root + 'nuscenes_map_anns_val.json',
+        ann_file='nuscenes_map_infos_temporal_val.pkl',
+        map_ann_file='nuscenes_map_anns_val.json',
         pipeline=test_pipeline, 
         bev_size=(bev_h_, bev_w_),
         pc_range=point_cloud_range,
@@ -296,42 +320,68 @@ data = dict(
         padding_value=-10000,
         map_classes=map_classes,
         classes=class_names, 
-        modality=input_modality),
-    shuffler_sampler=dict(type='DistributedGroupSampler'),
-    nonshuffler_sampler=dict(type='DistributedSampler')
+        modality=input_modality
+    )
 )
 
-optimizer = dict(
-    type='AdamW',
-    lr=6e-4,
+total_epochs = 24
+train_cfg = dict(type='EpochBasedTrainLoop', max_epochs=total_epochs, val_interval=2)
+val_cfg = dict(type='ValLoop')
+test_cfg = dict(type='TestLoop')
+
+param_scheduler = [
+    dict(
+        type='LinearLR',
+        start_factor=1.0 / 3,
+        end_factor=1e-3,
+        by_epoch=False,
+        begin=0,
+        end=500
+    ),
+    dict(
+        type='CosineAnnealingLR',
+        by_epoch=True,
+        begin=500,
+        end=total_epochs,
+        convert_to_iter_based=True
+    )
+]
+
+optim_wrapper = dict(
+    type='AmpOptimWrapper',
+    optimizer=dict(
+        type='AdamW',
+        lr=6e-4,
+        weight_decay=0.01
+    ),
     paramwise_cfg=dict(
         custom_keys={
             'img_backbone': dict(lr_mult=0.1),
-        }),
-    weight_decay=0.01)
+        }
+    ),
+    clip_grad=dict(max_norm=35, norm_type=2)
+)
 
-optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
-# learning policy
-lr_config = dict(
-    policy='CosineAnnealing',
-    warmup='linear',
-    warmup_iters=500,
-    warmup_ratio=1.0 / 3,
-    min_lr_ratio=1e-3)
-total_epochs = 24
-evaluation = dict(interval=2, pipeline=test_pipeline, metric='chamfer',
-                  save_best='NuscMap_chamfer/mAP', rule='greater')
+val_evaluator = dict(
+    interval=2,
+    pipeline=test_pipeline,
+    metric='chamfer',
+    save_best='NuscMap_chamfer/mAP',
+    rule='greater'
+)
+test_evaluator = val_evaluator
+
 # total_epochs = 50
 # evaluation = dict(interval=1, pipeline=test_pipeline)
 
-runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 
-log_config = dict(
-    interval=50,
-    hooks=[
-        dict(type='TextLoggerHook'),
-        dict(type='TensorboardLoggerHook')
-    ])
+default_hooks = dict(
+    timer=dict(type='IterTimerHook'),
+    logger=dict(type='LoggerHook', interval=50),
+    param_scheduler=dict(type='ParamSchedulerHook'),
+    checkpoint=dict(type='CheckpointHook', interval=2, max_keep_ckpts=1),
+    sampler_seed=dict(type='DistSamplerSeedHook'),
+    visualization=dict(type='DetVisualizationHook'))
+
 fp16 = dict(loss_scale=512.)
-checkpoint_config = dict(max_keep_ckpts=1, interval=2)
 find_unused_parameters=True

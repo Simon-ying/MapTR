@@ -8,7 +8,7 @@ import torch
 import mmcv
 from mmcv.runner.base_runner import BaseRunner
 from mmcv.runner.epoch_based_runner import EpochBasedRunner
-from mmcv.runner.builder import RUNNERS
+from mmengine.registry import RUNNERS
 from mmcv.runner.checkpoint import save_checkpoint
 from mmcv.runner.utils import get_host_info
 from pprint import pprint
