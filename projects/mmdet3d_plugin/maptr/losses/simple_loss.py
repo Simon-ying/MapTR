@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from mmdet.models.builder import LOSSES
+from mmdet.registry import MODELS
 import torch.nn.functional as F
 from mmdet.models.losses import FocalLoss, weight_reduce_loss
 
@@ -51,7 +51,7 @@ def py_sigmoid_focal_loss(pred,
     loss = weight_reduce_loss(loss, weight, reduction, avg_factor)
     return loss
 
-@LOSSES.register_module(force=True)
+@MODELS.register_module(force=True)
 class SimpleLoss_v1(nn.Module):
     def __init__(self, pos_weight, loss_weight):
         super(SimpleLoss_v1, self).__init__()
@@ -70,7 +70,7 @@ class SimpleLoss_v1(nn.Module):
         loss = F.binary_cross_entropy_with_logits(ypred, ytgt.float(), reduction='none',).sum() / max(1.0, fg_mask.sum())
         return loss*self.loss_weight
 
-@LOSSES.register_module()
+@MODELS.register_module()
 class SimpleLoss(torch.nn.Module):
     def __init__(self, pos_weight, loss_weight):
         super(SimpleLoss, self).__init__()
@@ -82,7 +82,7 @@ class SimpleLoss(torch.nn.Module):
         loss = self.loss_fn(ypred, ytgt)
         return loss*self.loss_weight
 
-@LOSSES.register_module()
+@MODELS.register_module()
 class MaskFocalLoss(FocalLoss):
     def __init__(self,**kwargs):
         super(MaskFocalLoss, self).__init__(**kwargs)

@@ -3,7 +3,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from mmdet.registry import MODELS
-from mmdet.models import build_loss
 from mmdet.models.dense_heads import DETRHead
 from mmdet3d.models.task_modules.builder import build_bbox_coder
 # from mmcv.runner import force_fp32, auto_fp16
@@ -177,8 +176,8 @@ class MapTRv2Head(DETRHead):
             *args, transformer=transformer, **kwargs)
         self.code_weights = nn.Parameter(torch.tensor(
             self.code_weights, requires_grad=False), requires_grad=False)
-        self.loss_pts = build_loss(loss_pts)
-        self.loss_dir = build_loss(loss_dir)
+        self.loss_pts = MODELS.build(loss_pts)
+        self.loss_dir = MODELS.build(loss_dir)
 
 
         num_query = num_vec * num_pts_per_vec
@@ -191,8 +190,8 @@ class MapTRv2Head(DETRHead):
         self.k_one2many = k_one2many
         self.lambda_one2many=lambda_one2many
 
-        self.loss_seg = build_loss(loss_seg)
-        self.loss_pv_seg = build_loss(loss_pv_seg)
+        self.loss_seg = MODELS.build(loss_seg)
+        self.loss_pv_seg = MODELS.build(loss_pv_seg)
         
         self._init_layers()
 
