@@ -9,7 +9,7 @@ from mmcv.cnn import build_norm_layer, trunc_normal_init
 from mmcv.cnn.bricks.transformer import FFN, build_dropout
 from mmcv.cnn.utils.weight_init import constant_init
 from mmcv.runner import _load_checkpoint
-from mmcv.runner.base_module import BaseModule, ModuleList
+from mmengine.model import BaseModule, ModuleList
 from torch.nn.modules.linear import Linear
 from torch.nn.modules.normalization import LayerNorm
 from torch.nn.modules.utils import _pair as to_2tuple

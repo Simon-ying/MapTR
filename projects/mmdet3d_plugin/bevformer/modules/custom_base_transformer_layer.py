@@ -12,7 +12,7 @@ import torch.nn as nn
 
 from mmcv import ConfigDict, deprecated_api_warning
 from mmcv.cnn import Linear, build_activation_layer, build_norm_layer
-from mmcv.runner.base_module import BaseModule, ModuleList, Sequential
+from mmengine.model import BaseModule, ModuleList, Sequential
 
 from mmcv.cnn.bricks.registry import (ATTENTION, FEEDFORWARD_NETWORK, POSITIONAL_ENCODING,
                                       TRANSFORMER_LAYER, TRANSFORMER_LAYER_SEQUENCE)

@@ -1,10 +1,11 @@
 _base_ = [
     '../datasets/custom_nus-3d.py',
-    '../_base_/default_runtime.py'
+    'mmdet::_base_/default_runtime.py'
 ]
 #
-plugin = True
-plugin_dir = 'projects/mmdet3d_plugin/'
+# plugin = True
+# plugin_dir = 'projects/mmdet3d_plugin/'
+custom_imports = dict(imports=['projects.mmdet3d_plugin'], allow_failed_imports=False)
 
 # If point cloud range is changed, the models should also change their point
 # cloud range accordingly
@@ -69,7 +70,9 @@ model = dict(
     type='MapTRv2',
     use_grid_mask=True,
     video_test_mode=False,
-    pretrained=dict(img='ckpts/resnet50-19c8e357.pth'),
+    init_cfg=dict(
+        type='Pretrained',
+        checkpoint='ckpts/resnet50-19c8e357.pth'),
     img_backbone=dict(
         type='ResNet',
         depth=50,

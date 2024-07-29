@@ -9,13 +9,13 @@ import warnings
 import numpy as np
 import torch
 import torch.distributed as dist
-from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
-from mmcv.runner import (HOOKS, DistSamplerSeedHook, EpochBasedRunner,
-                         Fp16OptimizerHook, OptimizerHook, build_optimizer,
-                         build_runner, get_dist_info)
+# from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
+# from mmcv.runner import (HOOKS, DistSamplerSeedHook, EpochBasedRunner,
+#                          Fp16OptimizerHook, OptimizerHook, build_optimizer,
+#                          build_runner, get_dist_info)
 from mmcv.utils import build_from_cfg
 
-from mmdet.core import EvalHook
+# from mmdet.core import EvalHook
 
 from mmdet.datasets import (build_dataset,
                             replace_ImageToTensor)

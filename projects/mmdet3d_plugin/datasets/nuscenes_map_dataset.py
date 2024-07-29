@@ -1,12 +1,11 @@
 import copy
 
 import numpy as np
-from mmdet.datasets import DATASETS
+from mmengine.registry import DATASETS
 from mmdet3d.datasets import NuScenesDataset
 import mmcv
 import os
 from os import path as osp
-from mmdet.datasets import DATASETS
 import torch
 import numpy as np
 from nuscenes.eval.common.utils import quaternion_yaw, Quaternion

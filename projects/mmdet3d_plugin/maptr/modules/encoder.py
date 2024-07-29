@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from mmcv.runner.base_module import BaseModule, ModuleList, Sequential
+from mmengine.model import BaseModule, ModuleList, Sequential
 import torch.nn as nn
 from mmcv.cnn.bricks.registry import (ATTENTION,
                                       TRANSFORMER_LAYER,
@@ -862,7 +862,7 @@ class BEVFormerEncoderDepth(BEVFormerEncoder):
                                   0, self.D, **depthnet_cfg)
 
 
-    @auto_fp16()
+    # @auto_fp16()
     def forward(self,
                 bev_query,
                 key,

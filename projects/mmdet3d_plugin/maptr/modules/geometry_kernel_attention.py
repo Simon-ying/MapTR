@@ -11,7 +11,7 @@ from mmcv.cnn.bricks.transformer import build_attention
 import math
 from mmcv.runner import force_fp32, auto_fp16
 
-from mmcv.runner.base_module import BaseModule, ModuleList, Sequential
+from mmengine.model import BaseModule, ModuleList, Sequential
 from projects.mmdet3d_plugin.models.utils.bricks import run_time
 
 from .ops.geometric_kernel_attn import GeometricKernelAttentionFunc

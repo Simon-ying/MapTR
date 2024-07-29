@@ -9,7 +9,7 @@ import time
 import torch
 import warnings
 from mmcv import Config, DictAction
-from mmcv.runner import get_dist_info, init_dist, wrap_fp16_model
+from mmengine.dist import get_dist_info, init_dist, wrap_fp16_model
 from os import path as osp
 
 from mmdet import __version__ as mmdet_version

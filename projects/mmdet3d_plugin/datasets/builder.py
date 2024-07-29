@@ -6,12 +6,12 @@ import random
 from functools import partial
 
 import numpy as np
-from mmcv.parallel import collate
-from mmcv.runner import get_dist_info
-from mmcv.utils import Registry, build_from_cfg
+from mmengine.dataset import default_collate
+from mmengine.dist import get_dist_info
+from mmengine.registry import Registry, build_from_cfg
 from torch.utils.data import DataLoader
 
-from mmdet.datasets.samplers import GroupSampler
+from mmdet.datasets.samplers import GroupMultiSourceSampler
 from projects.mmdet3d_plugin.datasets.samplers.group_sampler import DistributedGroupSampler
 from projects.mmdet3d_plugin.datasets.samplers.distributed_sampler import DistributedSampler
 from projects.mmdet3d_plugin.datasets.samplers.sampler import build_sampler
@@ -72,7 +72,7 @@ def build_dataloader(dataset,
     else:
         # assert False, 'not support in bevformer'
         print('WARNING!!!!, Only can be used for obtain inference speed!!!!')
-        sampler = GroupSampler(dataset, samples_per_gpu) if shuffle else None
+        sampler = GroupMultiSourceSampler(dataset, samples_per_gpu) if shuffle else None
         batch_size = num_gpus * samples_per_gpu
         num_workers = num_gpus * workers_per_gpu
 
@@ -85,7 +85,7 @@ def build_dataloader(dataset,
         batch_size=batch_size,
         sampler=sampler,
         num_workers=num_workers,
-        collate_fn=partial(collate, samples_per_gpu=samples_per_gpu),
+        collate_fn=partial(default_collate, samples_per_gpu=samples_per_gpu),
         pin_memory=False,
         worker_init_fn=init_fn,
         **kwargs)
@@ -103,10 +103,9 @@ def worker_init_fn(worker_id, num_workers, rank, seed):
 
 # Copyright (c) OpenMMLab. All rights reserved.
 import platform
-from mmcv.utils import Registry, build_from_cfg
 
-from mmdet.datasets import DATASETS
-from mmdet.datasets.builder import _concat_dataset
+from mmengine.registry import DATASETS
+# from mmdet.datasets.builder import _concat_dataset
 
 if platform.system() != 'Windows':
     # https://github.com/pytorch/pytorch/issues/973
@@ -139,7 +138,8 @@ def custom_build_dataset(cfg, default_args=None):
     elif cfg['type'] == 'CBGSDataset':
         dataset = CBGSDataset(custom_build_dataset(cfg['dataset'], default_args))
     elif isinstance(cfg.get('ann_file'), (list, tuple)):
-        dataset = _concat_dataset(cfg, default_args)
+        # dataset = _concat_dataset(cfg, default_args)
+        pass
     else:
         dataset = build_from_cfg(cfg, DATASETS, default_args)
 

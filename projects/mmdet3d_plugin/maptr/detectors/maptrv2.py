@@ -2,15 +2,16 @@ import copy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from mmdet.models import DETECTORS
-from mmdet3d.core import bbox3d2result
+from mmengine.registry import MODELS
 from mmdet3d.models.detectors.mvx_two_stage import MVXTwoStageDetector
 from projects.mmdet3d_plugin.models.utils.grid_mask import GridMask
-from mmcv.runner import force_fp32, auto_fp16
-from mmdet3d.ops import Voxelization, DynamicScatter
-from mmdet3d.models import builder
-from mmcv.utils import TORCH_VERSION, digit_version
-@DETECTORS.register_module()
+# from mmcv.runner import force_fp32, auto_fp16
+# from mmdet3d.models.data_preprocessors import Voxelization, DynamicScatter
+# from mmdet3d.models import builder
+from mmengine.utils.dl_utils import TORCH_VERSION
+from mmengine.utils import digit_version
+
+@MODELS.register_module()
 class MapTRv2(MVXTwoStageDetector):
     """MapTR.
     Args:
@@ -19,7 +20,6 @@ class MapTRv2(MVXTwoStageDetector):
 
     def __init__(self,
                  use_grid_mask=False,
-                 pts_voxel_layer=None,
                  pts_voxel_encoder=None,
                  pts_middle_encoder=None,
                  pts_fusion_layer=None,
@@ -32,18 +32,19 @@ class MapTRv2(MVXTwoStageDetector):
                  img_rpn_head=None,
                  train_cfg=None,
                  test_cfg=None,
-                 pretrained=None,
+                 init_cfg=None,
+                 data_preprocessor=None,
                  video_test_mode=False,
                  modality='vision',
                  lidar_encoder=None,
                  ):
 
         super(MapTRv2,
-              self).__init__(pts_voxel_layer, pts_voxel_encoder,
+              self).__init__(pts_voxel_encoder,
                              pts_middle_encoder, pts_fusion_layer,
                              img_backbone, pts_backbone, img_neck, pts_neck,
                              pts_bbox_head, img_roi_head, img_rpn_head,
-                             train_cfg, test_cfg, pretrained)
+                             train_cfg, test_cfg, init_cfg)
         self.grid_mask = GridMask(
             True, True, rotate=1, offset=False, ratio=0.5, mode=1, prob=0.7)
         self.use_grid_mask = use_grid_mask
@@ -58,18 +59,18 @@ class MapTRv2(MVXTwoStageDetector):
             'prev_angle': 0,
         }
         self.modality = modality
-        if self.modality == 'fusion' and lidar_encoder is not None :
-            if lidar_encoder["voxelize"].get("max_num_points", -1) > 0:
-                voxelize_module = Voxelization(**lidar_encoder["voxelize"])
-            else:
-                voxelize_module = DynamicScatter(**lidar_encoder["voxelize"])
-            self.lidar_modal_extractor = nn.ModuleDict(
-                {
-                    "voxelize": voxelize_module,
-                    "backbone": builder.build_middle_encoder(lidar_encoder["backbone"]),
-                }
-            )
-            self.voxelize_reduce = lidar_encoder.get("voxelize_reduce", True)
+        # if self.modality == 'fusion' and lidar_encoder is not None :
+        #     if lidar_encoder["voxelize"].get("max_num_points", -1) > 0:
+        #         voxelize_module = Voxelization(**lidar_encoder["voxelize"])
+        #     else:
+        #         voxelize_module = DynamicScatter(**lidar_encoder["voxelize"])
+        #     self.lidar_modal_extractor = nn.ModuleDict(
+        #         {
+        #             "voxelize": voxelize_module,
+        #             "backbone": builder.build_middle_encoder(lidar_encoder["backbone"]),
+        #         }
+        #     )
+        #     self.voxelize_reduce = lidar_encoder.get("voxelize_reduce", True)
 
 
     def extract_img_feat(self, img, img_metas, len_queue=None):
@@ -107,7 +108,7 @@ class MapTRv2(MVXTwoStageDetector):
                 img_feats_reshaped.append(img_feat.view(B, int(BN / B), C, H, W))
         return img_feats_reshaped
 
-    @auto_fp16(apply_to=('img'), out_fp32=True)
+    # @auto_fp16(apply_to=('img'), out_fp32=True)
     def extract_feat(self, img, img_metas=None, len_queue=None):
         """Extract features from images and points."""
 
@@ -218,7 +219,7 @@ class MapTRv2(MVXTwoStageDetector):
             return prev_bev
 
     @torch.no_grad()
-    @force_fp32()
+    # @force_fp32()
     def voxelize(self, points):
         feats, coords, sizes = [], [], []
         for k, res in enumerate(points):
@@ -246,7 +247,7 @@ class MapTRv2(MVXTwoStageDetector):
                 feats = feats.contiguous()
 
         return feats, coords, sizes
-    @auto_fp16(apply_to=('points'), out_fp32=True)
+    # @auto_fp16(apply_to=('points'), out_fp32=True)
     def extract_lidar_feat(self,points):
         feats, coords, sizes = self.voxelize(points)
         # voxel_features = self.lidar_modal_extractor["voxel_encoder"](feats, sizes, coords)
@@ -256,7 +257,7 @@ class MapTRv2(MVXTwoStageDetector):
         return lidar_feat
 
     # @auto_fp16(apply_to=('img', 'points'))
-    @force_fp32(apply_to=('img','points','prev_bev'))
+    # @force_fp32(apply_to=('img','points','prev_bev'))
     def forward_train(self,
                       points=None,
                       img_metas=None,

@@ -4,7 +4,7 @@
 			"path": "."
 		},
 		{
-			"path": "../../usr/local/lib/miniconda3/envs/maptr"
+			"path": "../../../anaconda3/envs/maptr/lib/python3.10/site-packages"
 		}
 	]
 }

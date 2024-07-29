@@ -80,7 +80,7 @@ class GridMask(nn.Module):
         self.fp16_enable = False
     def set_prob(self, epoch, max_epoch):
         self.prob = self.st_prob * epoch / max_epoch #+ 1.#0.5
-    @auto_fp16()
+    # @auto_fp16()
     def forward(self, x):
         if np.random.rand() > self.prob or not self.training:
             return x

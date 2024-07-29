@@ -8,7 +8,6 @@ from __future__ import division
 
 import argparse
 import copy
-import mmcv
 import os
 import time
 import torch
@@ -21,17 +20,19 @@ from os import path as osp
 from mmdet import __version__ as mmdet_version
 from mmdet3d import __version__ as mmdet3d_version
 #from mmdet3d.apis import train_model
-
-from mmdet3d.registry import DATASETS, MODELS
+from mmengine.registry import DATASETS
+from mmengine.registry import MODELS
 from mmdet3d.utils import collect_env
 from mmengine.runner import set_random_seed
 from mmseg import __version__ as mmseg_version
 
 from mmengine.utils.dl_utils import TORCH_VERSION
 from mmengine.utils import digit_version
+from mmengine.utils.path import mkdir_or_exist
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a detector')
+    # positional argument, meaning the user must provide the value for this argument in the order it is defined
     parser.add_argument('config', help='train config file path')
     parser.add_argument('--work-dir', help='the dir to save logs and models')
     parser.add_argument(
@@ -105,36 +106,31 @@ def main():
     cfg = Config.fromfile(args.config)
     if args.cfg_options is not None:
         cfg.merge_from_dict(args.cfg_options)
-    # import modules from string list.
-    if cfg.get('custom_imports', None):
-        from mmcv.utils import import_modules_from_strings
-        import_modules_from_strings(**cfg['custom_imports'])
 
-    # import modules from plguin/xx, registry will be updated
-    if hasattr(cfg, 'plugin'):
-        if cfg.plugin:
-            import importlib
-            if hasattr(cfg, 'plugin_dir'):
-                plugin_dir = cfg.plugin_dir
-                _module_dir = os.path.dirname(plugin_dir)
-                _module_dir = _module_dir.split('/')
-                _module_path = _module_dir[0]
+    # # import modules from plguin/xx, registry will be updated
+    # if hasattr(cfg, 'plugin'):
+    #     if cfg.plugin:
+    #         import importlib
+    #         if hasattr(cfg, 'plugin_dir'):
+    #             plugin_dir = cfg.plugin_dir
+    #             _module_dir = os.path.dirname(plugin_dir)
+    #             _module_dir = _module_dir.split('/')
+    #             _module_path = _module_dir[0]
 
-                for m in _module_dir[1:]:
-                    _module_path = _module_path + '.' + m
-                print(_module_path)
-                plg_lib = importlib.import_module(_module_path)
-            else:
-                # import dir is the dirpath for the config file
-                _module_dir = os.path.dirname(args.config)
-                _module_dir = _module_dir.split('/')
-                _module_path = _module_dir[0]
-                for m in _module_dir[1:]:
-                    _module_path = _module_path + '.' + m
-                print(_module_path)
-                plg_lib = importlib.import_module(_module_path)
+    #             for m in _module_dir[1:]:
+    #                 _module_path = _module_path + '.' + m
+    #             print(_module_path)
+    #             plg_lib = importlib.import_module(_module_path)
+    #         else:
+    #             # import dir is the dirpath for the config file
+    #             _module_dir = os.path.dirname(args.config)
+    #             _module_dir = _module_dir.split('/')
+    #             _module_path = _module_dir[0]
+    #             for m in _module_dir[1:]:
+    #                 _module_path = _module_path + '.' + m
+    #             print(_module_path)
+    #             plg_lib = importlib.import_module(_module_path)
 
-            from projects.mmdet3d_plugin.bevformer.apis.train import custom_train_model
     # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
@@ -171,7 +167,7 @@ def main():
         cfg.gpu_ids = range(world_size)
 
     # create work_dir
-    mmcv.mkdir_or_exist(osp.abspath(cfg.work_dir))
+    mkdir_or_exist(osp.abspath(cfg.work_dir))
     # dump config
     cfg.dump(osp.join(cfg.work_dir, osp.basename(args.config)))
     # init the logger before other steps
@@ -185,7 +181,7 @@ def main():
     else:
         logger_name = 'mmdet'
     logger = MMLogger(
-        log_file=log_file, log_level=cfg.log_level, logger_name=logger_name)
+        name="mmloger", log_file=log_file, log_level=cfg.log_level, logger_name=logger_name)
 
     # init the meta dict to record some important information such as
     # environment info and seed, which will be logged
@@ -212,39 +208,36 @@ def main():
     meta['seed'] = args.seed
     meta['exp_name'] = osp.basename(args.config)
 
-    model = MODELS.build(
-        cfg.model,
-        train_cfg=cfg.get('train_cfg'),
-        test_cfg=cfg.get('test_cfg'))
+
+    model = MODELS.build(cfg.model)
     model.init_weights()
 
     logger.info(f'Model:\n{model}')
-    datasets = [DATASETS.build(cfg.data.train)]
+    datasets = [DATASETS.build(cfg.train_dataloader.dataset)]
     if len(cfg.workflow) == 2:
-        val_dataset = copy.deepcopy(cfg.data.val)
-        # in case we use a dataset wrapper
-        if 'dataset' in cfg.data.train:
-            val_dataset.pipeline = cfg.data.train.dataset.pipeline
-        else:
-            val_dataset.pipeline = cfg.data.train.pipeline
+        val_dataset = copy.deepcopy(cfg.val_dataloader.dataset)
+
         # set test_mode=False here in deep copied config
         # which do not affect AP/AR calculation later
         # refer to https://mmdetection3d.readthedocs.io/en/latest/tutorials/customize_runtime.html#customize-workflow  # noqa
         val_dataset.test_mode = False
         datasets.append(DATASETS.build(val_dataset))
-    if cfg.checkpoint_config is not None:
+    if cfg.default_hooks is not None:
         # save mmdet version, config file content and class names in
         # checkpoints as meta data
-        cfg.checkpoint_config.meta = dict(
-            mmdet_version=mmdet_version,
-            mmseg_version=mmseg_version,
-            mmdet3d_version=mmdet3d_version,
-            config=cfg.pretty_text,
-            CLASSES=datasets[0].CLASSES,
-            PALETTE=datasets[0].PALETTE  # for segmentors
-            if hasattr(datasets[0], 'PALETTE') else None)
+        if hasattr(cfg.default_hooks, "checkpoint"):
+            cfg.default_hooks.checkpoint.meta = dict(
+                mmdet_version=mmdet_version,
+                mmseg_version=mmseg_version,
+                mmdet3d_version=mmdet3d_version,
+                config=cfg.pretty_text,
+                CLASSES=datasets[0].CLASSES,
+                PALETTE=datasets[0].PALETTE  # for segmentors
+                if hasattr(datasets[0], 'PALETTE') else None)
     # add an attribute for visualization convenience
     model.CLASSES = datasets[0].CLASSES
+
+    from projects.mmdet3d_plugin.bevformer.apis.train import custom_train_model
     custom_train_model(
         model,
         datasets,

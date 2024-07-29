@@ -6,7 +6,7 @@ from torch.nn.init import normal_
 import torch.nn.functional as F
 from mmdet.models.utils.builder import TRANSFORMER
 from mmcv.cnn import Linear, bias_init_with_prob, xavier_init, constant_init
-from mmcv.runner.base_module import BaseModule, ModuleList, Sequential
+from mmengine.model import BaseModule, ModuleList, Sequential
 from mmcv.cnn.bricks.transformer import build_transformer_layer_sequence
 from torchvision.transforms.functional import rotate
 from projects.mmdet3d_plugin.bevformer.modules.temporal_self_attention import TemporalSelfAttention

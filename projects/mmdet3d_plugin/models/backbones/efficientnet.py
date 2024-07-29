@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.utils.checkpoint as cp
 from mmcv.cnn.bricks import ConvModule, DropPath
-from mmcv.runner import BaseModule, Sequential
+from mmengine.model import BaseModule, Sequential
 
 from mmdet.models.builder import BACKBONES
 from ..utils import InvertedResidual, SELayer, make_divisible
