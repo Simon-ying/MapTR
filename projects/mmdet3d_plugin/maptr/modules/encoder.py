@@ -1,14 +1,12 @@
 import torch
 import numpy as np
-from mmcv.runner.base_module import BaseModule, ModuleList, Sequential
+from mmengine.model import BaseModule, ModuleList, Sequential
 import torch.nn as nn
-from mmcv.cnn.bricks.registry import (ATTENTION,
-                                      TRANSFORMER_LAYER,
-                                      TRANSFORMER_LAYER_SEQUENCE)
-from mmdet3d.ops import bev_pool
-from mmdet3d.ops.bev_pool_v2.bev_pool import bev_pool_v2
-from mmcv.runner import force_fp32, auto_fp16
+from mmengine.registry import MODELS
+from .ops.bev_pool import bev_pool
+from .ops.bev_pool_v2 import bev_pool_v2
 from torch.cuda.amp.autocast_mode import autocast
+from torch.utils.checkpoint import checkpoint
 from mmcv.cnn import build_conv_layer
 from mmdet.models.backbones.resnet import BasicBlock, Bottleneck
 import torch.nn.functional as F
@@ -24,7 +22,7 @@ def gen_dx_bx(xbound, ybound, zbound):
     return dx, bx, nx
 
 
-@TRANSFORMER_LAYER_SEQUENCE.register_module()
+@MODELS.register_module()
 class BaseTransform(BaseModule):
     def __init__(
         self,
@@ -57,7 +55,6 @@ class BaseTransform(BaseModule):
         # self.D = self.frustum.shape[0]
         self.fp16_enabled = False
 
-    @force_fp32()
     def create_frustum(self,fH,fW,img_metas):
         # iH, iW = self.image_size
         # fH, fW = self.feature_size
@@ -86,7 +83,7 @@ class BaseTransform(BaseModule):
         frustum = torch.stack((xs, ys, ds), -1)
         # return nn.Parameter(frustum, requires_grad=False)
         return frustum
-    @force_fp32()
+
     def get_geometry_v1(
         self,
         fH,
@@ -150,7 +147,6 @@ class BaseTransform(BaseModule):
 
         return points
 
-    @force_fp32()
     def get_geometry(
         self,
         fH,
@@ -189,7 +185,6 @@ class BaseTransform(BaseModule):
     def get_mlp_input(self, sensor2ego, intrin, post_rot, post_tran, bda):
         raise NotImplementedError
 
-    @force_fp32()
     def bev_pool(self, geom_feats, x):
         B, N, D, H, W, C = x.shape
         Nprime = B * N * D * H * W
@@ -227,7 +222,6 @@ class BaseTransform(BaseModule):
 
         return final
 
-    @force_fp32()
     def forward(
         self,
         images,
@@ -300,7 +294,7 @@ class BaseTransform(BaseModule):
         return x, depth
 
 
-@TRANSFORMER_LAYER_SEQUENCE.register_module()
+@MODELS.register_module()
 class BaseTransformV2(BaseModule):
     def __init__(
         self,
@@ -391,6 +385,7 @@ class BaseTransformV2(BaseModule):
                        post_trans,
                        lidar2ego_rots,
                        lidar2ego_trans,
+                       sensor2ego,
                        img_metas):
         B, N, _, _ = sensor2ego.shape
 
@@ -416,7 +411,6 @@ class BaseTransformV2(BaseModule):
         )
         return points
 
-    @force_fp32()
     def get_geometry_v1(
         self,
         fH,
@@ -480,7 +474,6 @@ class BaseTransformV2(BaseModule):
 
         return points
 
-    @force_fp32()
     def get_geometry(
         self,
         fH,
@@ -578,8 +571,6 @@ class BaseTransformV2(BaseModule):
         ), ranks_feat.int().contiguous(), interval_starts.int().contiguous(
         ), interval_lengths.int().contiguous()
 
-
-    @force_fp32()
     def voxel_pooling_v2(self, coor, depth, feat):
         ranks_bev, ranks_depth, ranks_feat, \
             interval_starts, interval_lengths = \
@@ -606,7 +597,6 @@ class BaseTransformV2(BaseModule):
         # if self.collapse_z:
         bev_feat = torch.cat(bev_feat.unbind(dim=2), 1)
         return bev_feat
-    @force_fp32()
     def bev_pool(self, geom_feats, x):
         B, N, D, H, W, C = x.shape
         Nprime = B * N * D * H * W
@@ -643,8 +633,6 @@ class BaseTransformV2(BaseModule):
         
         return final
 
-
-    @force_fp32()
     def forward(
         self,
         images,
@@ -844,7 +832,7 @@ class DepthNet(nn.Module):
 
 
 
-@TRANSFORMER_LAYER_SEQUENCE.register_module()
+@MODELS.register_module()
 class BEVFormerEncoderDepth(BEVFormerEncoder):
 
     def __init__(self, *args, in_channels=256, out_channels=256, feat_down_sample=32, loss_depth_weight = 3.0,
@@ -861,8 +849,6 @@ class BEVFormerEncoderDepth(BEVFormerEncoder):
         self.depth_net = DepthNet(in_channels, in_channels,
                                   0, self.D, **depthnet_cfg)
 
-
-    @auto_fp16()
     def forward(self,
                 bev_query,
                 key,
@@ -950,10 +936,8 @@ class BEVFormerEncoderDepth(BEVFormerEncoder):
             bev=bev_embed['bev'],
             depth=depth,
         )
-        # import ipdb; ipdb.set_trace()
         return ret_dict
 
-    @force_fp32()
     def get_cam_feats(self, x, mlp_input):
         B, N, C, fH, fW = x.shape
 
@@ -996,8 +980,6 @@ class BEVFormerEncoderDepth(BEVFormerEncoder):
                                                                            1:]
         return gt_depths.float()
 
-    
-    @force_fp32()
     def get_depth_loss(self, depth_labels, depth_preds):
         # import pdb;pdb.set_trace()
         if depth_preds is None:
@@ -1040,7 +1022,7 @@ class BEVFormerEncoderDepth(BEVFormerEncoder):
 
 
 
-@TRANSFORMER_LAYER_SEQUENCE.register_module()
+@MODELS.register_module()
 class LSSTransform(BaseTransform):
     def __init__(
         self,
@@ -1091,7 +1073,6 @@ class LSSTransform(BaseTransform):
         else:
             self.downsample = nn.Identity()
 
-    @force_fp32()
     def get_cam_feats(self, x, mlp_input):
         B, N, C, fH, fW = x.shape
 
@@ -1148,8 +1129,6 @@ class LSSTransform(BaseTransform):
                                                                            1:]
         return gt_depths.float()
 
-    
-    @force_fp32()
     def get_depth_loss(self, depth_labels, depth_preds):
         # import pdb;pdb.set_trace()
         if depth_preds is None:
@@ -1191,7 +1170,7 @@ class LSSTransform(BaseTransform):
         return mlp_input
 
 
-@TRANSFORMER_LAYER_SEQUENCE.register_module()
+@MODELS.register_module()
 class LSSTransformV2(BaseTransformV2):
     def __init__(
         self,
@@ -1245,7 +1224,6 @@ class LSSTransformV2(BaseTransformV2):
         else:
             self.downsample = nn.Identity()
 
-    @force_fp32()
     def get_cam_feats(self, x, mlp_input):
         B, N, C, fH, fW = x.shape
         x = x.view(B * N, C, fH, fW)
@@ -1300,7 +1278,6 @@ class LSSTransformV2(BaseTransformV2):
                                                                            1:]
         return gt_depths.float()
     
-    @force_fp32()
     def get_depth_loss(self, depth_labels, depth_preds):
         # import pdb;pdb.set_trace()
         if depth_preds is None:

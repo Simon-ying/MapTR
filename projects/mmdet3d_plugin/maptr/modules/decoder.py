@@ -1,12 +1,11 @@
 import torch
-from mmcv.cnn.bricks.registry import (ATTENTION,
-                                      TRANSFORMER_LAYER,
-                                      POSITIONAL_ENCODING,
-                                      TRANSFORMER_LAYER_SEQUENCE)
-from mmdet.models.utils.transformer import inverse_sigmoid
+from mmengine.registry import MODELS
+from mmdet.models.layers.transformer import inverse_sigmoid
 from mmcv.cnn.bricks.transformer import TransformerLayerSequence, BaseTransformerLayer
+import copy
+import warnings
 
-@TRANSFORMER_LAYER_SEQUENCE.register_module()
+@MODELS.register_module()
 class MapTRDecoder(TransformerLayerSequence):
     """Implements the decoder in DETR3D transformer.
     Args:
@@ -86,7 +85,7 @@ class MapTRDecoder(TransformerLayerSequence):
 
 
 
-@TRANSFORMER_LAYER.register_module()
+@MODELS.register_module()
 class DecoupledDetrTransformerDecoderLayer(BaseTransformerLayer):
     """Implements decoder layer in DETR transformer.
     Args:

@@ -2,15 +2,17 @@ import copy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from mmdet.models import HEADS, build_loss
+from mmdet.registry import MODELS
 from mmdet.models.dense_heads import DETRHead
-from mmdet3d.core.bbox.coders import build_bbox_coder
-from mmcv.runner import force_fp32, auto_fp16
-from mmcv.cnn import Linear, bias_init_with_prob, xavier_init, constant_init
-from mmdet.models.utils.transformer import inverse_sigmoid
-from mmdet.core.bbox.transforms import bbox_xyxy_to_cxcywh, bbox_cxcywh_to_xyxy
-from mmdet.core import (multi_apply, multi_apply, reduce_mean)
-from mmcv.utils import TORCH_VERSION, digit_version
+from mmdet3d.registry import TASK_UTILS
+from mmcv.cnn import Linear
+from mmengine.model import bias_init_with_prob, xavier_init, constant_init
+from mmdet.models.layers.transformer import inverse_sigmoid
+from mmdet.structures.bbox import bbox_xyxy_to_cxcywh, bbox_cxcywh_to_xyxy
+from mmdet.models.utils import multi_apply
+from mmdet.utils import reduce_mean
+from mmengine.utils import digit_version
+from mmengine.utils.dl_utils import TORCH_VERSION
 
 def normalize_2d_bbox(bboxes, pc_range):
 
@@ -50,7 +52,7 @@ def denormalize_2d_pts(pts, pc_range):
     new_pts[...,1:2] = (pts[...,1:2]*(pc_range[4] -
                             pc_range[1]) + pc_range[1])
     return new_pts
-@HEADS.register_module()
+@MODELS.register_module()
 class MapTRHead(DETRHead):
     """Head of Detr3D.
     Args:
@@ -105,7 +107,7 @@ class MapTRHead(DETRHead):
             self.code_weights = [1.0, 1.0, 1.0,
                                  1.0, 1.0, 1.0, 1.0, 1.0, 0.2, 0.2]
 
-        self.bbox_coder = build_bbox_coder(bbox_coder)
+        self.bbox_coder = TASK_UTILS.build(bbox_coder)
         self.pc_range = self.bbox_coder.pc_range
         self.real_w = self.pc_range[3] - self.pc_range[0]
         self.real_h = self.pc_range[4] - self.pc_range[1]
@@ -127,8 +129,8 @@ class MapTRHead(DETRHead):
             *args, transformer=transformer, **kwargs)
         self.code_weights = nn.Parameter(torch.tensor(
             self.code_weights, requires_grad=False), requires_grad=False)
-        self.loss_pts = build_loss(loss_pts)
-        self.loss_dir = build_loss(loss_dir)
+        self.loss_pts = MODELS.build(loss_pts)
+        self.loss_dir = MODELS.build(loss_dir)
         num_query = num_vec * num_pts_per_vec
         self.num_query = num_query
         self.num_vec = num_vec
@@ -198,8 +200,6 @@ class MapTRHead(DETRHead):
         #     constant_init(m[-1], 0, bias=0)
         # nn.init.constant_(self.reg_branches[0][-1].bias.data[2:], 0.)
     
-    # @auto_fp16(apply_to=('mlvl_feats'))
-    @force_fp32(apply_to=('mlvl_feats', 'prev_bev'))
     def forward(self, mlvl_feats, lidar_feat, img_metas, prev_bev=None,  only_bev=False):
         """Forward function.
         Args:
@@ -609,7 +609,6 @@ class MapTRHead(DETRHead):
             loss_dir = torch.nan_to_num(loss_dir)
         return loss_cls, loss_bbox, loss_iou, loss_pts, loss_dir
 
-    @force_fp32(apply_to=('preds_dicts'))
     def loss(self,
              gt_bboxes_list,
              gt_labels_list,
@@ -736,7 +735,6 @@ class MapTRHead(DETRHead):
             num_dec_layer += 1
         return loss_dict
 
-    @force_fp32(apply_to=('preds_dicts'))
     def get_bboxes(self, preds_dicts, img_metas, rescale=False):
         """Generate bboxes from bbox head predictions.
         Args:

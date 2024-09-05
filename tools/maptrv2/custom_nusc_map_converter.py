@@ -1,7 +1,7 @@
 import argparse
 from os import path as osp
 import sys
-import mmcv
+import mmengine
 import numpy as np
 import os
 from collections import OrderedDict
@@ -12,7 +12,6 @@ from os import path as osp
 from shapely.geometry import MultiPoint, box
 from typing import Dict, List, Optional, Tuple, Union
 
-from mmdet3d.core.bbox.box_np_ops import points_cam2img
 from mmdet3d.datasets import NuScenesDataset
 from nuscenes.map_expansion.map_api import NuScenesMap, NuScenesMapExplorer
 from nuscenes.eval.common.utils import quaternion_yaw, Quaternion
@@ -25,10 +24,8 @@ from shapely.geometry import Polygon, MultiPolygon, LineString, Point, box, Mult
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 import networkx as nx
+import json
 sys.path.append('.')
-
-
-
 
 class CNuScenesMapExplorer(NuScenesMapExplorer):
     def __ini__(self, *args, **kwargs):
@@ -59,17 +56,8 @@ class CNuScenesMapExplorer(NuScenesMapExplorer):
         centerline_dict = dict()
         for record in records:
             if record['polygon_token'] is None:
-                # import ipdb
-                # ipdb.set_trace()
                 continue
             polygon = self.map_api.extract_polygon(record['polygon_token'])
-
-            # if polygon.intersects(patch) or polygon.within(patch):
-            #     if not polygon.is_valid:
-            #         print('within: {}, intersect: {}'.format(polygon.within(patch), polygon.intersects(patch)))
-            #         print('polygon token {} is_valid: {}'.format(record['polygon_token'], polygon.is_valid))
-
-            # polygon = polygon.buffer(0)
 
             if polygon.is_valid:
                 # if within or intersect :
@@ -139,7 +127,7 @@ def get_available_scenes(nusc):
                 # path from lyftdataset is absolute path
                 lidar_path = lidar_path.split(f'{os.getcwd()}/')[-1]
                 # relative path
-            if not mmcv.is_filepath(lidar_path):
+            if not mmengine.is_filepath(lidar_path):
                 scene_not_exist = True
                 break
             else:
@@ -263,7 +251,7 @@ def _fill_trainval_infos(nusc,
     train_nusc_infos = []
     val_nusc_infos = []
     frame_idx = 0
-    for sample in mmcv.track_iter_progress(nusc.sample):
+    for sample in mmengine.track_iter_progress(nusc.sample):
         map_location = nusc.get('log', nusc.get('scene', sample['scene_token'])['log_token'])['location']
 
         lidar_token = sample['data']['LIDAR_TOP']
@@ -273,7 +261,7 @@ def _fill_trainval_infos(nusc,
         pose_record = nusc.get('ego_pose', sd_rec['ego_pose_token'])
         lidar_path, boxes, _ = nusc.get_sample_data(lidar_token)
 
-        mmcv.check_file_exist(lidar_path)
+        mmengine.check_file_exist(lidar_path)
         can_bus = _get_can_bus_info(nusc, nusc_can_bus, sample)
         ##
         info = {
@@ -831,18 +819,35 @@ def create_nuscenes_infos(root_path,
         data = dict(infos=train_nusc_infos, metadata=metadata)
         info_path = osp.join(out_path,
                              '{}_map_infos_temporal_test.pkl'.format(info_prefix))
-        mmcv.dump(data, info_path)
+        mmengine.dump(data, info_path)
     else:
         print('train sample: {}, val sample: {}'.format(
             len(train_nusc_infos), len(val_nusc_infos)))
         data = dict(infos=train_nusc_infos, metadata=metadata)
         info_path = osp.join(out_path,
                              '{}_map_infos_temporal_train.pkl'.format(info_prefix))
-        mmcv.dump(data, info_path)
+        mmengine.dump(data, info_path)
         data['infos'] = val_nusc_infos
         info_val_path = osp.join(out_path,
                                  '{}_map_infos_temporal_val.pkl'.format(info_prefix))
-        mmcv.dump(data, info_val_path)
+        info_val_json_path = osp.join(out_path,
+                                      '{}_map_infos_temporal_val.json'.format(info_prefix))        
+        mmengine.dump(data, info_val_path)
+
+        def ndarray2list(data):
+            if isinstance(data, dict):
+                return {k: ndarray2list(v) for k, v in data.items()}  # Recursively process dictionaries
+            elif isinstance(data, list):
+                return [ndarray2list(v) for v in data]  # Recursively process lists
+            elif isinstance(data, tuple):
+                return tuple(ndarray2list(v) for v in data)  # Recursively process tuples
+            elif isinstance(data, np.ndarray):
+                return data.tolist()  # Convert NumPy arrays to lists
+            else:
+                return data  # Return other data types as is
+
+        with open(info_val_json_path, 'w') as json_file:
+            json.dump(ndarray2list(data), json_file, indent=4, ensure_ascii=False)
 
 
 
@@ -924,7 +929,7 @@ args = parser.parse_args()
 
 
 if __name__ == '__main__':
-    train_version = f'{args.version}-trainval'
+    train_version = f'{args.version}'
     nuscenes_data_prep(
         root_path=args.root_path,
         can_bus_root_path=args.canbus,
@@ -933,12 +938,12 @@ if __name__ == '__main__':
         dataset_name='NuScenesDataset',
         out_dir=args.out_dir,
         max_sweeps=args.max_sweeps)
-    test_version = f'{args.version}-test'
-    nuscenes_data_prep(
-        root_path=args.root_path,
-        can_bus_root_path=args.canbus,
-        info_prefix=args.extra_tag,
-        version=test_version,
-        dataset_name='NuScenesDataset',
-        out_dir=args.out_dir,
-        max_sweeps=args.max_sweeps)
+    # test_version = f'{args.version}-test'
+    # nuscenes_data_prep(
+    #     root_path=args.root_path,
+    #     can_bus_root_path=args.canbus,
+    #     info_prefix=args.extra_tag,
+    #     version=test_version,
+    #     dataset_name='NuScenesDataset',
+    #     out_dir=args.out_dir,
+    #     max_sweeps=args.max_sweeps)

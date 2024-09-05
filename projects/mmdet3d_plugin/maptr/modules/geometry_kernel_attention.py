@@ -3,20 +3,12 @@ import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from mmcv.cnn import xavier_init, constant_init
-from mmcv.cnn.bricks.registry import (ATTENTION,
-                                      TRANSFORMER_LAYER,
-                                      TRANSFORMER_LAYER_SEQUENCE)
-from mmcv.cnn.bricks.transformer import build_attention
-import math
-from mmcv.runner import force_fp32, auto_fp16
 
-from mmcv.runner.base_module import BaseModule, ModuleList, Sequential
-from projects.mmdet3d_plugin.models.utils.bricks import run_time
-
+from mmengine.registry import MODELS
+from mmengine.model import BaseModule, constant_init, xavier_init
 from .ops.geometric_kernel_attn import GeometricKernelAttentionFunc
 
-@ATTENTION.register_module()
+@MODELS.register_module()
 class GeometrySptialCrossAttention(BaseModule):
     """An attention module used in BEVFormer.
     Args:
@@ -49,7 +41,7 @@ class GeometrySptialCrossAttention(BaseModule):
         self.dropout = nn.Dropout(dropout)
         self.pc_range = pc_range
         self.fp16_enabled = False
-        self.attention = build_attention(attention)
+        self.attention = MODELS.build(attention)
         self.embed_dims = embed_dims
         self.num_cams = num_cams
         self.output_proj = nn.Linear(embed_dims, embed_dims)
@@ -60,7 +52,6 @@ class GeometrySptialCrossAttention(BaseModule):
         """Default initialization for Parameters of Module."""
         xavier_init(self.output_proj, distribution='uniform', bias=0.)
 
-    @force_fp32(apply_to=('query', 'key', 'value', 'query_pos', 'reference_points_cam'))
     def forward(self,
                 query,
                 key,
@@ -166,7 +157,7 @@ class GeometrySptialCrossAttention(BaseModule):
         return self.dropout(slots) + inp_residual
 
 
-@ATTENTION.register_module()
+@MODELS.register_module()
 class GeometryKernelAttention(BaseModule):
     """An attention module used in BEVFormer based on Deformable-Detr.
     `Deformable DETR: Deformable Transformers for End-to-End Object Detection.

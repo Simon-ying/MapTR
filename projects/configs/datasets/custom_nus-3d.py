@@ -6,7 +6,8 @@ class_names = [
     'car', 'truck', 'trailer', 'bus', 'construction_vehicle', 'bicycle',
     'motorcycle', 'pedestrian', 'traffic_cone', 'barrier'
 ]
-dataset_type = 'NuScenesDataset_eval_modified'
+metainfo = dict(classes=class_names)
+dataset_type = 'CustomNuScenesDataset'
 data_root = 'data/nuscenes/'
 # Input modality for nuScenes dataset, this is consistent with the submission
 # format which requires the information in input_modality.
@@ -16,27 +17,35 @@ input_modality = dict(
     use_radar=False,
     use_map=False,
     use_external=False)
-file_client_args = dict(backend='disk')
-# Uncomment the following if use ceph or other file clients.
-# See https://mmcv.readthedocs.io/en/latest/api.html#mmcv.fileio.FileClient
-# for more details.
-# file_client_args = dict(
+# TODO: define proper prefix
+data_prefix = dict(pts='samples/LIDAR_TOP', img='', sweeps='sweeps/LIDAR_TOP')
+
+# Example to use different file client
+# Method 1: simply set the data root and let the file I/O module
+# automatically infer from prefix (not support LMDB and Memcache yet)
+
+# data_root = 's3://openmmlab/datasets/detection3d/nuscenes/'
+
+# Method 2: Use backend_args, file_client_args in versions before 1.1.0
+# backend_args = dict(
 #     backend='petrel',
 #     path_mapping=dict({
-#         './data/nuscenes/': 's3://nuscenes/nuscenes/',
-#         'data/nuscenes/': 's3://nuscenes/nuscenes/'
-#     }))
+#         './data/': 's3://openmmlab/datasets/detection3d/',
+#          'data/': 's3://openmmlab/datasets/detection3d/'
+#      }))
+backend_args = None
+
 train_pipeline = [
     dict(
         type='LoadPointsFromFile',
         coord_type='LIDAR',
         load_dim=5,
         use_dim=5,
-        file_client_args=file_client_args),
+        backend_args=backend_args),
     dict(
         type='LoadPointsFromMultiSweeps',
         sweeps_num=10,
-        file_client_args=file_client_args),
+        backend_args=backend_args),
     dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True),
     dict(
         type='GlobalRotScaleTrans',
@@ -48,8 +57,9 @@ train_pipeline = [
     dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
     dict(type='ObjectNameFilter', classes=class_names),
     dict(type='PointShuffle'),
-    dict(type='DefaultFormatBundle3D', class_names=class_names),
-    dict(type='Collect3D', keys=['points', 'gt_bboxes_3d', 'gt_labels_3d'])
+    dict(
+        type='Pack3DDetInputs',
+        keys=['points', 'gt_bboxes_3d', 'gt_labels_3d'])
 ]
 test_pipeline = [
     dict(
@@ -57,11 +67,12 @@ test_pipeline = [
         coord_type='LIDAR',
         load_dim=5,
         use_dim=5,
-        file_client_args=file_client_args),
+        backend_args=backend_args),
     dict(
         type='LoadPointsFromMultiSweeps',
         sweeps_num=10,
-        file_client_args=file_client_args),
+        test_mode=True,
+        backend_args=backend_args),
     dict(
         type='MultiScaleFlipAug3D',
         img_scale=(1333, 800),
@@ -75,13 +86,9 @@ test_pipeline = [
                 translation_std=[0, 0, 0]),
             dict(type='RandomFlip3D'),
             dict(
-                type='PointsRangeFilter', point_cloud_range=point_cloud_range),
-            dict(
-                type='DefaultFormatBundle3D',
-                class_names=class_names,
-                with_label=False),
-            dict(type='Collect3D', keys=['points'])
-        ])
+                type='PointsRangeFilter', point_cloud_range=point_cloud_range)
+        ]),
+    dict(type='Pack3DDetInputs', keys=['points'])
 ]
 # construct a pipeline for data and gt loading in show function
 # please keep its loading function consistent with test_pipeline (e.g. client)
@@ -91,51 +98,77 @@ eval_pipeline = [
         coord_type='LIDAR',
         load_dim=5,
         use_dim=5,
-        file_client_args=file_client_args),
+        backend_args=backend_args),
     dict(
         type='LoadPointsFromMultiSweeps',
         sweeps_num=10,
-        file_client_args=file_client_args),
-    dict(
-        type='DefaultFormatBundle3D',
-        class_names=class_names,
-        with_label=False),
-    dict(type='Collect3D', keys=['points'])
+        test_mode=True,
+        backend_args=backend_args),
+    dict(type='Pack3DDetInputs', keys=['points'])
 ]
 
-data = dict(
-    samples_per_gpu=4,
-    workers_per_gpu=4,
-    train=dict(
+
+train_dataloader = dict(
+    batch_size=4,
+    num_workers=4,
+    persistent_workers=True, # 如果设置为 True，dataloader 在迭代完一轮之后不会关闭数据读取的子进程，可以加速训练
+    sampler=dict(type='DefaultSampler', shuffle=True),
+    dataset=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file=data_root + 'nuscenes_infos_train.pkl',
+        ann_file='nuscenes_infos_train.pkl',
         pipeline=train_pipeline,
-        classes=class_names,
+        metainfo=metainfo,
         modality=input_modality,
         test_mode=False,
+        data_prefix=data_prefix,
         # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
         # and box_type_3d='Depth' in sunrgbd and scannet dataset.
-        box_type_3d='LiDAR'),
-    val=dict(
-        type=dataset_type,
-        ann_file=data_root + 'nuscenes_infos_val.pkl',
-        pipeline=test_pipeline,
-        classes=class_names,
-        modality=input_modality,
-        test_mode=True,
-        box_type_3d='LiDAR'),
-    test=dict(
+        box_type_3d='LiDAR',
+        backend_args=backend_args))
+test_dataloader = dict(
+    batch_size=1,
+    num_workers=1,
+    persistent_workers=True,
+    drop_last=False,
+    sampler=dict(type='DefaultSampler', shuffle=False),
+    dataset=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file=data_root + 'nuscenes_infos_val.pkl',
+        ann_file='nuscenes_infos_val.pkl',
         pipeline=test_pipeline,
-        classes=class_names,
+        metainfo=metainfo,
+        modality=input_modality,
+        data_prefix=data_prefix,
+        test_mode=True,
+        box_type_3d='LiDAR',
+        backend_args=backend_args))
+val_dataloader = dict(
+    batch_size=1,
+    num_workers=1,
+    persistent_workers=True,
+    drop_last=False,
+    sampler=dict(type='DefaultSampler', shuffle=False),
+    dataset=dict(
+        type=dataset_type,
+        data_root=data_root,
+        ann_file='nuscenes_infos_val.pkl',
+        pipeline=test_pipeline,
+        metainfo=metainfo,
         modality=input_modality,
         test_mode=True,
-        box_type_3d='LiDAR'))
-# For nuScenes dataset, we usually evaluate the model at the end of training.
-# Since the models are trained by 24 epochs by default, we set evaluation
-# interval to be 24. Please change the interval accordingly if you do not
-# use a default schedule.
-evaluation = dict(interval=24, pipeline=eval_pipeline)
+        data_prefix=data_prefix,
+        box_type_3d='LiDAR',
+        backend_args=backend_args))
+
+val_evaluator = dict(
+    type='NuScenesMetric',
+    data_root=data_root,
+    ann_file=data_root + 'nuscenes_infos_val.pkl',
+    metric='bbox',
+    backend_args=backend_args)
+test_evaluator = val_evaluator
+
+vis_backends = [dict(type='LocalVisBackend')]
+visualizer = dict(
+    type='Det3DLocalVisualizer', vis_backends=vis_backends, name='visualizer')

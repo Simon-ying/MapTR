@@ -11,7 +11,6 @@ import torch
 import numpy as np
 from nuscenes.eval.common.utils import quaternion_yaw, Quaternion
 from .nuscnes_eval import NuScenesEval_custom
-from projects.mmdet3d_plugin.models.utils.visual import save_tensor
 from mmcv.parallel import DataContainer as DC
 import random
 
@@ -20,7 +19,7 @@ from nuscenes.map_expansion.map_api import NuScenesMap, NuScenesMapExplorer
 from nuscenes.eval.common.utils import quaternion_yaw, Quaternion
 from shapely import affinity, ops
 from shapely.geometry import Polygon, LineString, box, MultiPolygon, MultiLineString
-from mmdet.datasets.pipelines import to_tensor
+from mmcv.transforms.formatting import to_tensor
 import json
 
 from pathlib import Path

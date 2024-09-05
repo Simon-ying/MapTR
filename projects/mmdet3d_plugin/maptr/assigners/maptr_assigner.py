@@ -1,10 +1,9 @@
 import torch
-from mmdet.core.bbox.builder import BBOX_ASSIGNERS
-from mmdet.core.bbox.assigners import AssignResult
-from mmdet.core.bbox.assigners import BaseAssigner
-from mmdet.core.bbox.match_costs import build_match_cost
+from mmdet.registry import TASK_UTILS
+from mmdet.models.task_modules.assigners import AssignResult, BaseAssigner
+from mmdet.registry import MODELS
 import torch.nn.functional as F
-from mmdet.core.bbox.transforms import bbox_xyxy_to_cxcywh, bbox_cxcywh_to_xyxy
+from mmdet.structures.bbox import bbox_xyxy_to_cxcywh, bbox_cxcywh_to_xyxy
 try:
     from scipy.optimize import linear_sum_assignment
 except ImportError:
@@ -71,7 +70,7 @@ def denormalize_2d_pts(pts, pc_range):
                             pc_range[1]) + pc_range[1])
     return new_pts
 
-@BBOX_ASSIGNERS.register_module()
+@TASK_UTILS.register_module()
 class MapTRAssigner(BaseAssigner):
     """Computes one-to-one matching between predictions and ground truth.
     This class computes an assignment between the targets and the predictions
@@ -108,10 +107,10 @@ class MapTRAssigner(BaseAssigner):
                  pts_cost=dict(type='ChamferDistance',loss_src_weight=1.0,loss_dst_weight=1.0),
                  pc_range=None):
         self.z_cfg = z_cfg
-        self.cls_cost = build_match_cost(cls_cost)
-        self.reg_cost = build_match_cost(reg_cost)
-        self.iou_cost = build_match_cost(iou_cost)
-        self.pts_cost = build_match_cost(pts_cost)
+        self.cls_cost = MODELS.build(cls_cost)
+        self.reg_cost = MODELS.build(reg_cost)
+        self.iou_cost = MODELS.build(iou_cost)
+        self.pts_cost = MODELS.build(pts_cost)
         self.pc_range = pc_range
 
     def assign(self,

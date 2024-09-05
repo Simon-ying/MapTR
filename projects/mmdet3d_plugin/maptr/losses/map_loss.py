@@ -1,13 +1,13 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+import mmcv.utils
 import torch
 from torch import nn as nn
 from torch.nn.functional import l1_loss, mse_loss, smooth_l1_loss
 
-from mmdet.models.builder import LOSSES
+from mmdet.registry import MODELS, TASK_UTILS
 from mmdet.models import weighted_loss
 import mmcv
 import torch.nn.functional as F
-from mmdet.core.bbox.match_costs.builder import MATCH_COST
 import functools
 
 
@@ -263,7 +263,7 @@ def pts_dir_cos_loss(pred, target):
     loss = loss.view(num_samples, num_dir)
     return loss
 
-@LOSSES.register_module()
+@MODELS.register_module()
 class OrderedPtsSmoothL1Loss(nn.Module):
     """L1 loss.
 
@@ -306,7 +306,7 @@ class OrderedPtsSmoothL1Loss(nn.Module):
         return loss_bbox
 
 
-@LOSSES.register_module()
+@MODELS.register_module()
 class PtsDirCosLoss(nn.Module):
     """L1 loss.
 
@@ -350,7 +350,7 @@ class PtsDirCosLoss(nn.Module):
 
 
 
-@LOSSES.register_module()
+@MODELS.register_module()
 class PtsL1Loss(nn.Module):
     """L1 loss.
 
@@ -392,7 +392,7 @@ class PtsL1Loss(nn.Module):
             pred, target, weight, reduction=reduction, avg_factor=avg_factor)
         return loss_bbox
 
-@LOSSES.register_module()
+@MODELS.register_module()
 class OrderedPtsL1Loss(nn.Module):
     """L1 loss.
 
@@ -437,7 +437,7 @@ class OrderedPtsL1Loss(nn.Module):
 
 
 
-@MATCH_COST.register_module()
+@TASK_UTILS.register_module()
 class OrderedPtsSmoothL1Cost(object):
     """OrderedPtsL1Cost.
      Args:
@@ -468,7 +468,7 @@ class OrderedPtsSmoothL1Cost(object):
         # bbox_cost = torch.cdist(bbox_pred, gt_bboxes, p=1)
         return bbox_cost * self.weight
 
-@MATCH_COST.register_module()
+@TASK_UTILS.register_module()
 class PtsL1Cost(object):
     """OrderedPtsL1Cost.
      Args:
@@ -497,7 +497,7 @@ class PtsL1Cost(object):
         bbox_cost = torch.cdist(bbox_pred, gt_bboxes, p=1)
         return bbox_cost * self.weight
 
-@MATCH_COST.register_module()
+@TASK_UTILS.register_module()
 class OrderedPtsL1Cost(object):
     """OrderedPtsL1Cost.
      Args:
@@ -526,7 +526,7 @@ class OrderedPtsL1Cost(object):
         bbox_cost = torch.cdist(bbox_pred, gt_bboxes, p=1)
         return bbox_cost * self.weight
 
-@MATCH_COST.register_module()
+@TASK_UTILS.register_module()
 class MyChamferDistanceCost:
     def __init__(self, loss_src_weight=1., loss_dst_weight=1.):
         # assert mode in ['smooth_l1', 'l1', 'l2']
@@ -561,7 +561,7 @@ class MyChamferDistanceCost:
         loss = loss_src*self.loss_src_weight + loss_dst * self.loss_dst_weight
         return loss
 
-@mmcv.jit(derivate=True, coderize=True)
+@mmcv.utils.jit(derivate=True, coderize=True)
 def chamfer_distance(src,
                      dst,
                      src_weight=1.0,
@@ -639,7 +639,7 @@ def chamfer_distance(src,
     return loss_src, loss_dst, indices1, indices2
 
 
-@LOSSES.register_module()
+@MODELS.register_module()
 class MyChamferDistance(nn.Module):
     """Calculate Chamfer Distance of two sets.
 

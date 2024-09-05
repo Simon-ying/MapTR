@@ -2,14 +2,15 @@ import copy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from mmdet.models import DETECTORS
-from mmdet3d.core import bbox3d2result
+from mmdet3d.registry import MODELS
 from mmdet3d.models.detectors.mvx_two_stage import MVXTwoStageDetector
 from projects.mmdet3d_plugin.models.utils.grid_mask import GridMask
-from mmcv.runner import force_fp32, auto_fp16
-from mmdet3d.ops import Voxelization, DynamicScatter
-from mmdet3d.models import builder
-@DETECTORS.register_module()
+from mmcv.ops import DynamicScatter, Voxelization
+from mmengine.utils import digit_version
+from mmengine.utils.dl_utils import TORCH_VERSION
+from mmengine.structures import InstanceData
+
+@MODELS.register_module()
 class MapTR(MVXTwoStageDetector):
     """MapTR.
     Args:
@@ -65,7 +66,7 @@ class MapTR(MVXTwoStageDetector):
             self.lidar_modal_extractor = nn.ModuleDict(
                 {
                     "voxelize": voxelize_module,
-                    "backbone": builder.build_middle_encoder(lidar_encoder["backbone"]),
+                    "backbone": MODELS.build(lidar_encoder["backbone"]),
                 }
             )
             self.voxelize_reduce = lidar_encoder.get("voxelize_reduce", True)
@@ -106,7 +107,6 @@ class MapTR(MVXTwoStageDetector):
                 img_feats_reshaped.append(img_feat.view(B, int(BN / B), C, H, W))
         return img_feats_reshaped
 
-    @auto_fp16(apply_to=('img'), out_fp32=True)
     def extract_feat(self, img, img_metas=None, len_queue=None):
         """Extract features from images and points."""
 
@@ -183,7 +183,6 @@ class MapTR(MVXTwoStageDetector):
             return prev_bev
 
     @torch.no_grad()
-    @force_fp32()
     def voxelize(self, points):
         feats, coords, sizes = [], [], []
         for k, res in enumerate(points):
@@ -211,7 +210,7 @@ class MapTR(MVXTwoStageDetector):
                 feats = feats.contiguous()
 
         return feats, coords, sizes
-    @auto_fp16(apply_to=('points'), out_fp32=True)
+
     def extract_lidar_feat(self,points):
         feats, coords, sizes = self.voxelize(points)
         # voxel_features = self.lidar_modal_extractor["voxel_encoder"](feats, sizes, coords)
@@ -220,8 +219,6 @@ class MapTR(MVXTwoStageDetector):
         
         return lidar_feat
 
-    # @auto_fp16(apply_to=('img', 'points'))
-    @force_fp32(apply_to=('img','points','prev_bev'))
     def forward_train(self,
                       points=None,
                       img_metas=None,
@@ -372,14 +369,12 @@ class MapTR(MVXTwoStageDetector):
         return new_prev_bev, bbox_list
 
 
-@DETECTORS.register_module()
+@MODELS.register_module()
 class MapTR_fp16(MapTR):
     """
     The default version BEVFormer currently can not support FP16. 
     We provide this version to resolve this issue.
     """
-    # @auto_fp16(apply_to=('img', 'prev_bev', 'points'))
-    @force_fp32(apply_to=('img','points','prev_bev'))
     def forward_train(self,
                       points=None,
                       img_metas=None,

@@ -4,25 +4,21 @@
 #  Modified by Zhiqi Li
 # ---------------------------------------------
 
-from projects.mmdet3d_plugin.models.utils.bricks import run_time
 from .multi_scale_deformable_attn_function import MultiScaleDeformableAttnFunction_fp32
 from mmcv.ops.multi_scale_deform_attn import multi_scale_deformable_attn_pytorch
 import warnings
 import torch
 import torch.nn as nn
-from mmcv.cnn import xavier_init, constant_init
-from mmcv.cnn.bricks.registry import ATTENTION
+from mmengine.model import BaseModule, ModuleList, Sequential, constant_init, xavier_init
+from mmengine.registry import MODELS
 import math
-from mmcv.runner.base_module import BaseModule, ModuleList, Sequential
-from mmcv.utils import (ConfigDict, build_from_cfg, deprecated_api_warning,
-                        to_2tuple)
 
 from mmcv.utils import ext_loader
 ext_module = ext_loader.load_ext(
     '_ext', ['ms_deform_attn_backward', 'ms_deform_attn_forward'])
 
 
-@ATTENTION.register_module()
+@MODELS.register_module()
 class TemporalSelfAttention(BaseModule):
     """An attention module used in BEVFormer based on Deformable-Detr.
 
@@ -106,6 +102,7 @@ class TemporalSelfAttention(BaseModule):
 
     def init_weights(self):
         """Default initialization for Parameters of Module."""
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         constant_init(self.sampling_offsets, 0.)
         thetas = torch.arange(
             self.num_heads,
@@ -114,8 +111,8 @@ class TemporalSelfAttention(BaseModule):
         grid_init = (grid_init /
                      grid_init.abs().max(-1, keepdim=True)[0]).view(
             self.num_heads, 1, 1,
-            2).repeat(1, self.num_levels*self.num_bev_queue, self.num_points, 1)
-
+            2).repeat(1, self.num_levels*self.num_bev_queue, self.num_points, 1).to(device)
+        
         for i in range(self.num_points):
             grid_init[:, :, i, :] *= i + 1
 
@@ -173,7 +170,6 @@ class TemporalSelfAttention(BaseModule):
         Returns:
              Tensor: forwarded results with shape [num_query, bs, embed_dims].
         """
-
         if value is None:
             assert self.batch_first
             bs, len_bev, c = query.shape
@@ -194,15 +190,13 @@ class TemporalSelfAttention(BaseModule):
         assert (spatial_shapes[:, 0] * spatial_shapes[:, 1]).sum() == num_value
         assert self.num_bev_queue == 2
 
-        query = torch.cat([value[:bs], query], -1)
-        value = self.value_proj(value)
-
+        query = torch.cat([value[:bs], query], -1) # (bs, num_query ,embed_dims*2)
+        value = self.value_proj(value) 
         if key_padding_mask is not None:
             value = value.masked_fill(key_padding_mask[..., None], 0.0)
 
         value = value.reshape(bs*self.num_bev_queue,
                               num_value, self.num_heads, -1)
-
         sampling_offsets = self.sampling_offsets(query)
         sampling_offsets = sampling_offsets.view(
             bs, num_query, self.num_heads,  self.num_bev_queue, self.num_levels, self.num_points, 2)

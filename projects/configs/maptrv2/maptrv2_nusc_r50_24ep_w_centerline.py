@@ -2,9 +2,8 @@ _base_ = [
     '../datasets/custom_nus-3d.py',
     '../_base_/default_runtime.py'
 ]
-#
-plugin = True
-plugin_dir = 'projects/mmdet3d_plugin/'
+
+custom_imports = dict(imports=['projects.mmdet3d_plugin'], allow_failed_imports=False)
 
 # If point cloud range is changed, the models should also change their point
 # cloud range accordingly
@@ -31,8 +30,7 @@ class_names = [
 ]
 # map has classes: divider, ped_crossing, boundary
 map_classes = ['divider', 'ped_crossing','boundary','centerline']
-# fixed_ptsnum_per_line = 20
-# map_classes = ['divider',]
+
 num_vec=70
 fixed_ptsnum_per_gt_line = 20 # now only support fixed_pts > 0
 fixed_ptsnum_per_pred_line = 20
@@ -50,11 +48,10 @@ _dim_ = 256
 _pos_dim_ = _dim_//2
 _ffn_dim_ = _dim_*2
 _num_levels_ = 1
-# bev_h_ = 50
-# bev_w_ = 50
 bev_h_ = 200
 bev_w_ = 100
 queue_length = 1 # each sequence contains `queue_length` frames.
+metainfo = dict(classes=class_names, map_classes=map_classes)
 
 aux_seg_cfg = dict(
     use_aux_seg=True,
@@ -67,11 +64,17 @@ aux_seg_cfg = dict(
 
 model = dict(
     type='MapTRv2',
+    data_preprocessor=dict(
+        type='CustomDet3DDataPreprocessor',
+        mean=[123.675, 116.28, 103.53],
+        std=[58.395, 57.12, 57.375],
+        bgr_to_rgb=True,
+        pad_size_divisor=32,
+        queue_length=queue_length),
     use_grid_mask=True,
     video_test_mode=False,
-    pretrained=dict(img='ckpts/resnet50-19c8e357.pth'),
     img_backbone=dict(
-        type='ResNet',
+        type='mmdet.ResNet',
         depth=50,
         num_stages=4,
         out_indices=(3,),
@@ -80,7 +83,7 @@ model = dict(
         norm_eval=True,
         style='pytorch'),
     img_neck=dict(
-        type='FPN',
+        type='mmdet.FPN',
         in_channels=[2048],
         out_channels=_dim_,
         start_level=0,
@@ -172,13 +175,13 @@ model = dict(
             col_num_embed=bev_w_,
             ),
         loss_cls=dict(
-            type='FocalLoss',
+            type='mmdet.FocalLoss',
             use_sigmoid=True,
             gamma=2.0,
             alpha=0.25,
             loss_weight=2.0),
-        loss_bbox=dict(type='L1Loss', loss_weight=0.0),
-        loss_iou=dict(type='GIoULoss', loss_weight=0.0),
+        loss_bbox=dict(type='mmdet.L1Loss', loss_weight=0.0),
+        loss_iou=dict(type='mmdet.GIoULoss', loss_weight=0.0),
         loss_pts=dict(type='PtsL1Loss', 
                       loss_weight=5.0),
         loss_dir=dict(type='PtsDirCosLoss', loss_weight=0.005),
@@ -196,142 +199,159 @@ model = dict(
         out_size_factor=4,
         assigner=dict(
             type='MapTRAssigner',
-            cls_cost=dict(type='FocalLossCost', weight=2.0),
+            cls_cost=dict(type='mmdet.FocalLossCost', weight=2.0),
             reg_cost=dict(type='BBoxL1Cost', weight=0.0, box_format='xywh'),
             # reg_cost=dict(type='BBox3DL1Cost', weight=0.25),
             # iou_cost=dict(type='IoUCost', weight=1.0), # Fake cost. This is just to make it compatible with DETR head.
-            iou_cost=dict(type='IoUCost', iou_mode='giou', weight=0.0),
+            iou_cost=dict(type='mmdet.IoUCost', iou_mode='giou', weight=0.0),
             pts_cost=dict(type='OrderedPtsL1Cost', 
                       weight=5),
             pc_range=point_cloud_range))))
 
 dataset_type = 'CustomNuScenesOfflineLocalMapDataset'
 data_root = 'data/nuscenes/'
-file_client_args = dict(backend='disk')
-
+backend_args = None
 
 train_pipeline = [
     dict(type='LoadMultiViewImageFromFiles', to_float32=True),
     dict(type='RandomScaleImageMultiViewImage', scales=[0.5]),
     dict(type='PhotoMetricDistortionMultiViewImage'),
-    dict(type='NormalizeMultiviewImage', **img_norm_cfg),
     dict(
         type='LoadPointsFromFile',
         coord_type='LIDAR',
         load_dim=5,
         use_dim=5,
-        file_client_args=file_client_args),
+        backend_args=backend_args),
     dict(type='CustomPointToMultiViewDepth', downsample=1, grid_config=grid_config),
-    dict(type='PadMultiViewImageDepth', size_divisor=32), 
-    dict(type='DefaultFormatBundle3D', with_gt=False, with_label=False,class_names=map_classes),
-    dict(type='CustomCollect3D', keys=['img', 'gt_depth'])
+    dict(
+        type='CustomPack3DDetInputs',
+        keys=[
+            'img', 'depths', 'gt_labels_3d'
+        ])
 ]
 
 test_pipeline = [
     dict(type='LoadMultiViewImageFromFiles', to_float32=True),
     dict(type='RandomScaleImageMultiViewImage', scales=[0.5]),
-    dict(type='NormalizeMultiviewImage', **img_norm_cfg),
-   
     dict(
         type='MultiScaleFlipAug3D',
         img_scale=(1600, 900),
         pts_scale_ratio=1,
         flip=False,
         transforms=[
-            dict(type='PadMultiViewImage', size_divisor=32),
             dict(
-                type='DefaultFormatBundle3D', 
-                with_gt=False, 
-                with_label=False,
-                class_names=map_classes),
-            dict(type='CustomCollect3D', keys=['img'])
+                type='CustomPack3DDetInputs',
+                keys=['img'])
         ])
 ]
 
-data = dict(
-    samples_per_gpu=4,
-    workers_per_gpu=4, # TODO
-    train=dict(
+train_dataloader = dict(
+    batch_size=1,
+    num_workers=4,
+    dataset=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file=data_root + 'nuscenes_map_infos_temporal_train.pkl',
+        ann_file='nuscenes_map_infos_temporal_train.pkl',
+        data_prefix=dict(
+            pts='samples/LIDAR_TOP',
+            CAM_FRONT='samples/CAM_FRONT',
+            CAM_FRONT_LEFT='samples/CAM_FRONT_LEFT',
+            CAM_FRONT_RIGHT='samples/CAM_FRONT_RIGHT',
+            CAM_BACK='samples/CAM_BACK',
+            CAM_BACK_RIGHT='samples/CAM_BACK_RIGHT',
+            CAM_BACK_LEFT='samples/CAM_BACK_LEFT'),
         pipeline=train_pipeline,
-        classes=class_names,
+        load_type="mv_image_based",
+        box_type_3d='LiDAR',
+        metainfo=metainfo,
+        test_mode=False,
         modality=input_modality,
         aux_seg=aux_seg_cfg,
-        test_mode=False,
         use_valid_flag=True,
+        backend_args=backend_args,
         bev_size=(bev_h_, bev_w_),
         pc_range=point_cloud_range,
         fixed_ptsnum_per_line=fixed_ptsnum_per_gt_line,
         eval_use_same_gt_sample_num_flag=eval_use_same_gt_sample_num_flag,
         padding_value=-10000,
-        map_classes=map_classes,
-        queue_length=queue_length,
-        # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
-        # and box_type_3d='Depth' in sunrgbd and scannet dataset.
-        box_type_3d='LiDAR'),
-    val=dict(
+        queue_length=queue_length,))
+
+test_dataloader = dict(
+    batch_size=1,
+    num_workers=4,
+    dataset=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file=data_root + 'nuscenes_map_infos_temporal_val.pkl',
-        map_ann_file=data_root + 'nuscenes_map_anns_val.json',
-        pipeline=test_pipeline,  bev_size=(bev_h_, bev_w_),
-        pc_range=point_cloud_range,
-        fixed_ptsnum_per_line=fixed_ptsnum_per_gt_line,
-        eval_use_same_gt_sample_num_flag=eval_use_same_gt_sample_num_flag,
-        padding_value=-10000,
-        map_classes=map_classes,
-        classes=class_names, modality=input_modality, samples_per_gpu=1),
-    test=dict(
-        type=dataset_type,
-        data_root=data_root,
-        ann_file=data_root + 'nuscenes_map_infos_temporal_val.pkl',
-        map_ann_file=data_root + 'nuscenes_map_anns_val.json',
-        pipeline=test_pipeline, 
+        ann_file='nuscenes_map_infos_temporal_val.pkl',
+        map_ann_file=data_root+'/nuscenes_map_anns_val.pkl',
+        data_prefix=dict(
+            pts='samples/LIDAR_TOP',
+            CAM_FRONT='samples/CAM_FRONT',
+            CAM_FRONT_LEFT='samples/CAM_FRONT_LEFT',
+            CAM_FRONT_RIGHT='samples/CAM_FRONT_RIGHT',
+            CAM_BACK='samples/CAM_BACK',
+            CAM_BACK_RIGHT='samples/CAM_BACK_RIGHT',
+            CAM_BACK_LEFT='samples/CAM_BACK_LEFT'),
+        pipeline=test_pipeline,
+        load_type="mv_image_based",
+        box_type_3d='LiDAR',
+        metainfo=metainfo,
+        test_mode=False,
+        modality=input_modality,
+        aux_seg=aux_seg_cfg,
+        use_valid_flag=True,
+        backend_args=backend_args,
         bev_size=(bev_h_, bev_w_),
         pc_range=point_cloud_range,
         fixed_ptsnum_per_line=fixed_ptsnum_per_gt_line,
         eval_use_same_gt_sample_num_flag=eval_use_same_gt_sample_num_flag,
         padding_value=-10000,
-        map_classes=map_classes,
-        classes=class_names, 
-        modality=input_modality),
-    shuffler_sampler=dict(type='DistributedGroupSampler'),
-    nonshuffler_sampler=dict(type='DistributedSampler')
-)
+        queue_length=queue_length,))
+val_dataloader = test_dataloader
 
-optimizer = dict(
-    type='AdamW',
-    lr=6e-4,
-    paramwise_cfg=dict(
-        custom_keys={
-            'img_backbone': dict(lr_mult=0.1),
-        }),
-    weight_decay=0.01)
+test_evaluator = dict(
+    ann_file=data_root+'/nuscenes_map_infos_temporal_val.pkl',
+    map_ann_file=data_root+'/nuscenes_map_anns_val.pkl',
+    backend_args=None,
+    data_root=data_root,
+    metric='bbox',
+    type='NuScenesMetric')
+val_evaluator = test_evaluator
 
-optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
-# learning policy
-lr_config = dict(
-    policy='CosineAnnealing',
-    warmup='linear',
-    warmup_iters=500,
-    warmup_ratio=1.0 / 3,
-    min_lr_ratio=1e-3)
-total_epochs = 24
-evaluation = dict(interval=2, pipeline=test_pipeline, metric='chamfer',
-                  save_best='NuscMap_chamfer/mAP', rule='greater')
-# total_epochs = 50
-# evaluation = dict(interval=1, pipeline=test_pipeline)
+optim_wrapper = dict(
+    type='AmpOptimWrapper',
+    loss_scale='dynamic',
+    optimizer=dict(type='AdamW', lr=6e-4, weight_decay=0.01),
+    paramwise_cfg=dict(custom_keys={
+        'img_backbone': dict(lr_mult=0.1),
+    }),
+    clip_grad=dict(max_norm=35, norm_type=2))
 
-runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
+num_epochs = 24
 
-log_config = dict(
-    interval=50,
-    hooks=[
-        dict(type='TextLoggerHook'),
-        dict(type='TensorboardLoggerHook')
-    ])
-fp16 = dict(loss_scale=512.)
-checkpoint_config = dict(max_keep_ckpts=1, interval=2)
-find_unused_parameters=True
+param_scheduler = [
+    dict(
+        type='LinearLR',
+        start_factor=1.0 / 3,
+        begin=0,
+        end=500,
+        by_epoch=False),
+    dict(
+        type='CosineAnnealingLR',
+        # TODO Figure out what T_max
+        T_max=num_epochs,
+        by_epoch=True,
+    )
+]
+
+train_cfg = dict(
+    type='EpochBasedTrainLoop',
+    max_epochs=num_epochs,
+    val_interval=1)
+val_cfg = dict(type='ValLoop')
+test_cfg = dict(type='TestLoop')
+find_unused_parameters = False
+
+runner = dict(type='EpochBasedRunner', max_epochs=num_epochs)
+load_from = 'ckpts/resnet50-19c8e357.pth'
+resume = False

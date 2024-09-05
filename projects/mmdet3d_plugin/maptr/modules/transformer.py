@@ -4,9 +4,8 @@ import torch.nn as nn
 import numpy as np
 from torch.nn.init import normal_
 import torch.nn.functional as F
-from mmdet.models.utils.builder import TRANSFORMER
-from mmcv.cnn import Linear, bias_init_with_prob, xavier_init, constant_init
-from mmcv.runner.base_module import BaseModule, ModuleList, Sequential
+from mmdet.registry import MODELS
+from mmengine.model import BaseModule, xavier_init, constant_init
 from mmcv.cnn.bricks.transformer import build_transformer_layer_sequence
 from torchvision.transforms.functional import rotate
 from projects.mmdet3d_plugin.bevformer.modules.temporal_self_attention import TemporalSelfAttention
@@ -31,7 +30,7 @@ class ConvFuser(nn.Sequential):
 
 
 
-@TRANSFORMER.register_module()
+@MODELS.register_module()
 class MapTRPerceptionTransformer(BaseModule):
     """Implements the Detr3D transformer.
     Args:

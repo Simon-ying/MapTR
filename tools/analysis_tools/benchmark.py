@@ -1,26 +1,28 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import argparse
 import time
+
 import torch
-from mmcv import Config
-from mmcv.parallel import MMDataParallel
-from mmcv.runner import load_checkpoint, wrap_fp16_model
-import sys
-sys.path.append('.')
-from projects.mmdet3d_plugin.datasets.builder import build_dataloader
-from projects.mmdet3d_plugin.datasets import custom_build_dataset
-# from mmdet3d.datasets import build_dataloader, build_dataset
-from mmdet3d.models import build_detector
-#from tools.misc.fuse_conv_bn import fuse_module
+from mmengine import Config
+from mmengine.device import get_device
+from mmengine.registry import init_default_scope
+from mmengine.runner import Runner, autocast, load_checkpoint
+
+from mmdet3d.registry import MODELS
+from tools.misc.fuse_conv_bn import fuse_module
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='MMDet benchmark a model')
     parser.add_argument('config', help='test config file path')
-    parser.add_argument('--checkpoint', default=None, help='checkpoint file')
+    parser.add_argument('checkpoint', help='checkpoint file')
     parser.add_argument('--samples', default=2000, help='samples to benchmark')
     parser.add_argument(
         '--log-interval', default=50, help='interval of logging')
+    parser.add_argument(
+        '--amp',
+        action='store_true',
+        help='Whether to use automatic mixed precision inference')
     parser.add_argument(
         '--fuse-conv-bn',
         action='store_true',
@@ -32,38 +34,23 @@ def parse_args():
 
 def main():
     args = parse_args()
+    init_default_scope('mmdet3d')
 
+    # build config and set cudnn_benchmark
     cfg = Config.fromfile(args.config)
-    # set cudnn_benchmark
-    if cfg.get('cudnn_benchmark', False):
+
+    if cfg.env_cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
-    cfg.model.pretrained = None
-    cfg.data.test.test_mode = True
 
-    # build the dataloader
-    # TODO: support multiple images per gpu (only minor changes are needed)
-    print(cfg.data.test)
-    dataset = custom_build_dataset(cfg.data.test)
-    data_loader = build_dataloader(
-        dataset,
-        samples_per_gpu=1,
-        workers_per_gpu=cfg.data.workers_per_gpu,
-        dist=False,
-        shuffle=False)
+    # build dataloader
+    dataloader = Runner.build_dataloader(cfg.test_dataloader)
 
-    # build the model and load checkpoint
-    cfg.model.train_cfg = None
-    model = build_detector(cfg.model, test_cfg=cfg.get('test_cfg'))
-    fp16_cfg = cfg.get('fp16', None)
-    if fp16_cfg is not None:
-        wrap_fp16_model(model)
-    if args.checkpoint is not None:
-        load_checkpoint(model, args.checkpoint, map_location='cpu')
-    #if args.fuse_conv_bn:
-    #    model = fuse_module(model)
-
-    model = MMDataParallel(model, device_ids=[0])
-
+    # build model and load checkpoint
+    model = MODELS.build(cfg.model)
+    load_checkpoint(model, args.checkpoint, map_location='cpu')
+    if args.fuse_conv_bn:
+        model = fuse_module(model)
+    model.to(get_device())
     model.eval()
 
     # the first several iterations may be very slow so skip them
@@ -71,11 +58,13 @@ def main():
     pure_inf_time = 0
 
     # benchmark with several samples and take the average
-    for i, data in enumerate(data_loader):
+    for i, data in enumerate(dataloader):
+
         torch.cuda.synchronize()
         start_time = time.perf_counter()
-        with torch.no_grad():
-            model(return_loss=False, rescale=True, **data)
+
+        with autocast(enabled=args.amp):
+            model.test_step(data)
 
         torch.cuda.synchronize()
         elapsed = time.perf_counter() - start_time
@@ -84,13 +73,13 @@ def main():
             pure_inf_time += elapsed
             if (i + 1) % args.log_interval == 0:
                 fps = (i + 1 - num_warmup) / pure_inf_time
-                print(f'Done image [{i + 1:<3}/ {args.samples}], '
-                      f'fps: {fps:.1f} img / s')
+                print(f'Done sample [{i + 1:<3}/ {args.samples}], '
+                      f'fps: {fps:.1f} sample / s')
 
         if (i + 1) == args.samples:
             pure_inf_time += elapsed
             fps = (i + 1 - num_warmup) / pure_inf_time
-            print(f'Overall fps: {fps:.1f} img / s')
+            print(f'Overall fps: {fps:.1f} sample / s')
             break
 
 

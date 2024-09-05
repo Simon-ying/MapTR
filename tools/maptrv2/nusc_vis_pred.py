@@ -1,24 +1,18 @@
 import argparse
-import mmcv
+import mmengine
 import os
 import shutil
 import torch
 import warnings
-from mmcv import Config, DictAction
+from mmengine import Config, DictAction
 from mmcv.cnn import fuse_conv_bn
-from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
-from mmcv.runner import (get_dist_info, init_dist, load_checkpoint,
-                         wrap_fp16_model)
-from mmdet3d.utils import collect_env, get_root_logger
-from mmdet3d.apis import single_gpu_test
-from mmdet3d.datasets import build_dataset
+from mmengine.model.wrappers import MMDistributedDataParallel
+from mmengine.runner import load_checkpoint
+from mmdet3d.utils import collect_env
+from mmdet3d.registry import DATASETS, MODELS
+from torch.utils.data import DataLoader
 import sys
-sys.path.append('')
-from projects.mmdet3d_plugin.datasets.builder import build_dataloader
-from mmdet3d.models import build_model
-from mmdet.apis import set_random_seed
-from projects.mmdet3d_plugin.bevformer.apis.test import custom_multi_gpu_test
-from mmdet.datasets import replace_ImageToTensor
+sys.path.append('.')
 import time
 import os.path as osp
 import numpy as np
@@ -128,32 +122,31 @@ def main():
         cfg.data.test.test_mode = True
         samples_per_gpu = cfg.data.test.pop('samples_per_gpu', 1)
         if samples_per_gpu > 1:
-            # Replace 'ImageToTensor' to 'DefaultFormatBundle'
-            cfg.data.test.pipeline = replace_ImageToTensor(
-                cfg.data.test.pipeline)
+            samples_per_gpu = 1
+            print("Assert samples_per_gpu=1")
     elif isinstance(cfg.data.test, list):
         for ds_cfg in cfg.data.test:
             ds_cfg.test_mode = True
         samples_per_gpu = max(
             [ds_cfg.pop('samples_per_gpu', 1) for ds_cfg in cfg.data.test])
         if samples_per_gpu > 1:
-            for ds_cfg in cfg.data.test:
-                ds_cfg.pipeline = replace_ImageToTensor(ds_cfg.pipeline)
+            samples_per_gpu = 1
+            print("Assert samples_per_gpu=1")
 
     if args.show_dir is None:
         args.show_dir = osp.join('./work_dirs', 
                                 osp.splitext(osp.basename(args.config))[0],
                                 'vis_pred')
     # create vis_label dir
-    mmcv.mkdir_or_exist(osp.abspath(args.show_dir))
+    mmengine.mkdir_or_exist(osp.abspath(args.show_dir))
     cfg.dump(osp.join(args.show_dir, osp.basename(args.config)))
     logger = get_root_logger()
     logger.info(f'DONE create vis_pred dir: {args.show_dir}')
 
 
-    dataset = build_dataset(cfg.data.test)
+    dataset = DATASETS.build(cfg.data.test)
     dataset.is_vis_on_test = True #TODO, this is a hack
-    data_loader = build_dataloader(
+    data_loader = DataLoader(
         dataset,
         samples_per_gpu=samples_per_gpu,
         # workers_per_gpu=cfg.data.workers_per_gpu,
@@ -168,10 +161,7 @@ def main():
     # import pdb;pdb.set_trace()
     cfg.model.train_cfg = None
     # cfg.model.pts_bbox_head.bbox_coder.max_num=15 # TODO this is a hack
-    model = build_model(cfg.model, test_cfg=cfg.get('test_cfg'))
-    fp16_cfg = cfg.get('fp16', None)
-    if fp16_cfg is not None:
-        wrap_fp16_model(model)
+    model = MODELS.build(cfg.model, test_cfg=cfg.get('test_cfg'))
     logger.info('loading check point')
     checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')
     if 'CLASSES' in checkpoint.get('meta', {}):
@@ -185,7 +175,6 @@ def main():
         # segmentation dataset has `PALETTE` attribute
         model.PALETTE = dataset.PALETTE
     logger.info('DONE load check point')
-    model = MMDataParallel(model, device_ids=[0])
     model.eval()
 
     img_norm_cfg = cfg.img_norm_cfg
@@ -211,8 +200,7 @@ def main():
     mask_results = []
     dataset = data_loader.dataset
     have_mask = False
-    # prog_bar = mmcv.ProgressBar(len(CANDIDATE))
-    prog_bar = mmcv.ProgressBar(len(dataset))
+    prog_bar = mmengine.ProgressBar(len(dataset))
     # import pdb;pdb.set_trace()
     for i, data in enumerate(data_loader):
         if ~(data['gt_labels_3d'].data[0][0] != -1).any():
@@ -237,7 +225,7 @@ def main():
         with torch.no_grad():
             result = model(return_loss=False, rescale=True, **data)
         sample_dir = osp.join(args.show_dir, pts_filename)
-        mmcv.mkdir_or_exist(osp.abspath(sample_dir))
+        mmengine.mkdir_or_exist(osp.abspath(sample_dir))
 
         filename_list = img_metas[0]['filename']
         img_path_dict = {}

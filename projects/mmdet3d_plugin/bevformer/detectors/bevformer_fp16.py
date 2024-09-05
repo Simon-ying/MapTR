@@ -6,9 +6,7 @@
 
 from tkinter.messagebox import NO
 import torch
-from mmcv.runner import force_fp32, auto_fp16
-from mmdet.models import DETECTORS
-from mmdet3d.core import bbox3d2result
+from mmdet.registry import MODELS
 from mmdet3d.models.detectors.mvx_two_stage import MVXTwoStageDetector
 from projects.mmdet3d_plugin.models.utils.grid_mask import GridMask
 from projects.mmdet3d_plugin.bevformer.detectors.bevformer import BEVFormer
@@ -16,17 +14,15 @@ import time
 import copy
 import numpy as np
 import mmdet3d
-from projects.mmdet3d_plugin.models.utils.bricks import run_time
 
 
-@DETECTORS.register_module()
+@MODELS.register_module()
 class BEVFormer_fp16(BEVFormer):
     """
     The default version BEVFormer currently can not support FP16. 
     We provide this version to resolve this issue.
     """
-    
-    @auto_fp16(apply_to=('img', 'prev_bev', 'points'))
+
     def forward_train(self,
                       points=None,
                       img_metas=None,
