@@ -6,31 +6,27 @@ Following https://mmdetection3d.readthedocs.io/en/latest/getting_started.html#in
 
 **a. Create a conda virtual environment and activate it.**
 ```shell
-conda create -n maptr python=3.8 -y
+conda create -n maptr python=3.10 -y
 conda activate maptr
 ```
 
 **b. Install PyTorch and torchvision following the [official instructions](https://pytorch.org/).**
 ```shell
-pip install torch==1.9.1+cu111 torchvision==0.10.1+cu111 torchaudio==0.9.1 -f https://download.pytorch.org/whl/torch_stable.html
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 # Recommended torch>=1.9
-```
-
-**c. Install gcc>=5 in conda env (optional).**
-```shell
-conda install -c omgarcia gcc-5 # gcc-6.2
 ```
 
 **c. Install mmcv-full.**
 ```shell
-pip install mmcv-full==1.4.0
-#  pip install mmcv-full==1.4.0 -f https://download.openmmlab.com/mmcv/dist/cu111/torch1.9.0/index.html
+pip install -U openmim
+mim install mmengine
+pip install mmcv==2.1.0 -f https://download.openmmlab.com/mmcv/dist/cu118/torch2.1/index.html
 ```
 
 **d. Install mmdet and mmseg.**
 ```shell
-pip install mmdet==2.14.0
-pip install mmsegmentation==0.14.1
+mim install mmdet
+pip install "mmsegmentation>=1.0.0"
 ```
 
 **e. Install timm.**
@@ -38,29 +34,23 @@ pip install mmsegmentation==0.14.1
 pip install timm
 ```
 
-
-**f. Clone MapTR.**
-```
-git clone https://github.com/hustvl/MapTR.git
-```
-
-**g. Install mmdet3d and GKT**
+**f. Install mmdet3d and GKT**
 ```shell
 cd /path/to/MapTR/mmdetection3d
-python setup.py develop
+pip install -v -e .
 
 cd /path/to/MapTR/projects/mmdet3d_plugin/maptr/modules/ops/geometric_kernel_attn
-python setup.py build install
+pip install -v .
 
 ```
 
-**h. Install other requirements.**
+**g. Install other requirements.**
 ```shell
 cd /path/to/MapTR
 pip install -r requirement.txt
 ```
 
-**i. Prepare pretrained models.**
+**h. Prepare pretrained models.**
 ```shell
 cd /path/to/MapTR
 mkdir ckpts

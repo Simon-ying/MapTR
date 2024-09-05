@@ -41,7 +41,7 @@ MapTR
 |   |   ├── nuscenes_infos_temporal_val.pkl
 ```
 
-## Argoverse2
+## Argoverse2 (TODO)
 Download the Argoverse2 Sensor Dataset [here](https://www.argoverse.org/av2.html#download-link).
 
 **Folder structure**

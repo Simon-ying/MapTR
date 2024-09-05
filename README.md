@@ -40,7 +40,7 @@ High-definition (HD) map provides abundant and precise static environmental info
 > Results from the [MapTRv2 paper](https://arxiv.org/abs/2308.05736)
 
 
-![comparison]()
+### comparison
 
 | Method | Backbone | Lr Schd | mAP| FPS|
 | :---: | :---: | :---: | :---: | :---: 
