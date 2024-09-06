@@ -1,24 +1,23 @@
 import os
 from typing import Any, Dict, Tuple
 
-import mmcv
 import numpy as np
 from nuscenes.map_expansion.map_api import NuScenesMap
 from nuscenes.map_expansion.map_api import locations as LOCATIONS
 from PIL import Image
-
-
-from mmdet3d.core.points import BasePoints, get_points_type
-from mmdet.datasets.builder import PIPELINES
-from mmdet.datasets.pipelines import LoadAnnotations
+import mmengine
+import mmcv
+from mmdet3d.structures.points import BasePoints, get_points_type
+from mmdet3d.registry import TRANSFORMS
+from mmcv.transforms import BaseTransform
 
 from .loading_utils import load_augmented_point_cloud, reduce_LiDAR_beams
 
 import torch
 from pyquaternion import Quaternion
 
-@PIPELINES.register_module()
-class CustomLoadMultiViewImageFromFiles(object):
+@TRANSFORMS.register_module()
+class CustomLoadMultiViewImageFromFiles(BaseTransform):
     """Load multi channel images from a list of separate channel files.
 
     Expects results['img_filename'] to be a list of filenames.
@@ -35,7 +34,7 @@ class CustomLoadMultiViewImageFromFiles(object):
         self.padding = padding
         self.pad_val = pad_val
 
-    def __call__(self, results):
+    def transform(self, results):
         """Call function to load multi-view image from files.
 
         Args:
@@ -92,8 +91,8 @@ class CustomLoadMultiViewImageFromFiles(object):
         repr_str += f"color_type='{self.color_type}')"
         return repr_str
 
-@PIPELINES.register_module()
-class CustomLoadPointsFromMultiSweeps:
+@TRANSFORMS.register_module()
+class CustomLoadPointsFromMultiSweeps(BaseTransform):
     """Load points from multiple sweeps.
 
     This is usually used for nuScenes dataset to utilize previous sweeps.
@@ -142,7 +141,7 @@ class CustomLoadPointsFromMultiSweeps:
         Returns:
             np.ndarray: An array containing point clouds data.
         """
-        mmcv.check_file_exist(lidar_path)
+        mmengine.check_file_exist(lidar_path)
         if self.load_augmented:
             assert self.load_augmented in ["pointpainting", "mvp"]
             virtual = self.load_augmented == "mvp"
@@ -177,7 +176,7 @@ class CustomLoadPointsFromMultiSweeps:
         not_close = np.logical_not(np.logical_and(x_filt, y_filt))
         return points[not_close]
 
-    def __call__(self, results):
+    def transform(self, results):
         """Call function to load multi-sweep point clouds from files.
 
         Args:
@@ -248,8 +247,8 @@ class CustomLoadPointsFromMultiSweeps:
 
 
 
-@PIPELINES.register_module()
-class CustomLoadPointsFromFile:
+@TRANSFORMS.register_module()
+class CustomLoadPointsFromFile(BaseTransform):
     """Load Points From File.
 
     Load sunrgbd and scannet points from file.
@@ -303,7 +302,7 @@ class CustomLoadPointsFromFile:
         Returns:
             np.ndarray: An array containing point clouds data.
         """
-        mmcv.check_file_exist(lidar_path)
+        mmengine.check_file_exist(lidar_path)
         if self.load_augmented:
             assert self.load_augmented in ["pointpainting", "mvp"]
             virtual = self.load_augmented == "mvp"
@@ -317,7 +316,7 @@ class CustomLoadPointsFromFile:
 
         return points
 
-    def __call__(self, results):
+    def transform(self, results):
         """Call function to load points data from file.
 
         Args:
@@ -369,8 +368,8 @@ class CustomLoadPointsFromFile:
         return results
 
 
-@PIPELINES.register_module()
-class CustomPointToMultiViewDepth(object):
+@TRANSFORMS.register_module()
+class CustomPointToMultiViewDepth(BaseTransform):
 
     def __init__(self, grid_config, downsample=1):
         self.downsample = downsample
@@ -397,7 +396,7 @@ class CustomPointToMultiViewDepth(object):
         depth_map[coor[:, 1], coor[:, 0]] = depth
         return depth_map
 
-    def __call__(self, results):
+    def transform(self, results):
         points_lidar = results['points']
         imgs = np.stack(results['img'])
         img_aug_matrix  = results['img_aug_matrix']

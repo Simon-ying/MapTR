@@ -1,19 +1,18 @@
 import copy
 
 import numpy as np
-from mmdet.datasets import DATASETS
+from mmdet3d.registry import DATASETS
 from mmdet3d.datasets import NuScenesDataset
-import mmcv
+import mmengine
 from os import path as osp
-from mmdet.datasets import DATASETS
 import torch
-import numpy as np
 from nuscenes.eval.common.utils import quaternion_yaw, Quaternion
-from .nuscnes_eval import NuScenesEval_custom
 from projects.mmdet3d_plugin.models.utils.visual import save_tensor
-from mmcv.parallel import DataContainer as DC
+from mmengine.structures import BaseDataElement
+from mmdet3d.structures import Det3DDataSample
 import random
-
+from mmdet3d.structures import LiDARInstance3DBoxes
+from mmengine.structures import InstanceData
 
 @DATASETS.register_module()
 class CustomNuScenesDataset(NuScenesDataset):
@@ -28,76 +27,64 @@ class CustomNuScenesDataset(NuScenesDataset):
         self.overlap_test = overlap_test
         self.bev_size = bev_size
         
-    def prepare_train_data(self, index):
-        """
-        Training data preparation.
+    def prepare_data(self, index):
+        """Data preparation for both training and testing stage.
+
+        Called by `__getitem__`  of dataset.
+
         Args:
             index (int): Index for accessing the target data.
+
         Returns:
-            dict: Training data dict of the corresponding index.
+            dict or None: Data dict of the corresponding index.
         """
-        data_queue = []
-
-        # temporal aug
-        prev_indexs_list = list(range(index-self.queue_length, index))
-        random.shuffle(prev_indexs_list)
-        prev_indexs_list = sorted(prev_indexs_list[1:], reverse=True)
-        ##
-
-        input_dict = self.get_data_info(index)
-        if input_dict is None:
-            return None
-        frame_idx = input_dict['frame_idx']
-        scene_token = input_dict['scene_token']
-        self.pre_pipeline(input_dict)
-        example = self.pipeline(input_dict)
-        if self.filter_empty_gt and \
-                (example is None or ~(example['gt_labels_3d']._data != -1).any()):
-            return None
-        data_queue.insert(0, example)
-        for i in prev_indexs_list:
+        queue = []
+        index_list = list(range(index-self.queue_length, index))
+        random.shuffle(index_list)
+        index_list = sorted(index_list[1:])
+        index_list.append(index)
+        for i in index_list:
             i = max(0, i)
             input_dict = self.get_data_info(i)
             if input_dict is None:
                 return None
-            if input_dict['frame_idx'] < frame_idx and input_dict['scene_token'] == scene_token:
-                self.pre_pipeline(input_dict)
-                example = self.pipeline(input_dict)
-                if self.filter_empty_gt and \
-                        (example is None or ~(example['gt_labels_3d']._data != -1).any()):
-                    return None
-                frame_idx = input_dict['frame_idx']
-            data_queue.insert(0, copy.deepcopy(example))
-        return self.union2one(data_queue)
+            example = self.pipeline(input_dict)
+            if not self.test_mode and self.filter_empty_gt and \
+                (example is None or ~(example["data_samples"].gt_instances_3d.labels_3d != -1).any()):
+                return None
+            queue.append(example)
+        return self.union2one(queue)
+
 
     def union2one(self, queue):
-        """
-        convert sample queue into one single sample.
-        """
-        imgs_list = [each['img'].data for each in queue]
+        imgs_list = [each['inputs']['img'] for each in queue]
+
         metas_map = {}
+        prev_scene_token = None
         prev_pos = None
         prev_angle = None
         for i, each in enumerate(queue):
-            metas_map[i] = each['img_metas'].data
-            if i == 0:
-                metas_map[i]['prev_bev'] = False
-                prev_pos = copy.deepcopy(metas_map[i]['can_bus'][:3])
-                prev_angle = copy.deepcopy(metas_map[i]['can_bus'][-1])
-                metas_map[i]['can_bus'][:3] = 0
-                metas_map[i]['can_bus'][-1] = 0
-            else:
-                metas_map[i]['prev_bev'] = True
-                tmp_pos = copy.deepcopy(metas_map[i]['can_bus'][:3])
-                tmp_angle = copy.deepcopy(metas_map[i]['can_bus'][-1])
-                metas_map[i]['can_bus'][:3] -= prev_pos
-                metas_map[i]['can_bus'][-1] -= prev_angle
-                prev_pos = copy.deepcopy(tmp_pos)
-                prev_angle = copy.deepcopy(tmp_angle)
-
-        queue[-1]['img'] = DC(torch.stack(imgs_list),
-                              cpu_only=False, stack=True)
-        queue[-1]['img_metas'] = DC(metas_map, cpu_only=True)
+            metas_map[i] = each['data_samples']
+            metainfo_i = copy.deepcopy(metas_map[i].metainfo)
+            if not self.test_mode:
+                if metainfo_i['scene_token'] != prev_scene_token:
+                    metainfo_i['prev_bev_exists'] = False
+                    prev_scene_token = metainfo_i['scene_token']
+                    prev_pos = copy.deepcopy(metainfo_i['can_bus'][:3])
+                    prev_angle = copy.deepcopy(metainfo_i['can_bus'][-1])
+                    metainfo_i['can_bus'][:3] = 0
+                    metainfo_i['can_bus'][-1] = 0
+                else:
+                    metainfo_i['prev_bev_exists'] = True
+                    tmp_pos = copy.deepcopy(metainfo_i['can_bus'][:3])
+                    tmp_angle = copy.deepcopy(metainfo_i['can_bus'][-1])
+                    metainfo_i['can_bus'][:3] -= prev_pos
+                    metainfo_i['can_bus'][-1] -= prev_angle
+                    prev_pos = copy.deepcopy(tmp_pos)
+                    prev_angle = copy.deepcopy(tmp_angle)
+            metas_map[i].set_metainfo(metainfo_i)
+        queue[-1]['inputs']['img'] = torch.stack(imgs_list)
+        queue[-1]['data_samples'] = metas_map
         queue = queue[-1]
         return queue
 
@@ -120,7 +107,7 @@ class CustomNuScenesDataset(NuScenesDataset):
                     from lidar to different cameras.
                 - ann_info (dict): Annotation info.
         """
-        info = self.data_infos[index]
+        info = super().get_data_info(index)
         # standard protocal modified from SECOND.Pytorch
         input_dict = dict(
             sample_idx=info['token'],
@@ -141,7 +128,16 @@ class CustomNuScenesDataset(NuScenesDataset):
             lidar2img_rts = []
             lidar2cam_rts = []
             cam_intrinsics = []
+            input_dict.update(
+                dict(
+                    images = dict()
+                )
+            )
             for cam_type, cam_info in info['cams'].items():
+                cam_dict = dict()
+                cam_dict["img_path"] = cam_info['data_path']
+                cam_dict["cam2img"] = cam_info['cam_intrinsic']
+
                 image_paths.append(cam_info['data_path'])
                 # obtain lidar to image transformation matrix
                 lidar2cam_r = np.linalg.inv(cam_info['sensor2lidar_rotation'])
@@ -150,6 +146,10 @@ class CustomNuScenesDataset(NuScenesDataset):
                 lidar2cam_rt = np.eye(4)
                 lidar2cam_rt[:3, :3] = lidar2cam_r.T
                 lidar2cam_rt[3, :3] = -lidar2cam_t
+
+                cam_dict["lidar2cam"] = lidar2cam_rt.T
+                input_dict["images"][cam_type] = cam_dict
+
                 intrinsic = cam_info['cam_intrinsic']
                 viewpad = np.eye(4)
                 viewpad[:intrinsic.shape[0], :intrinsic.shape[1]] = intrinsic
@@ -168,8 +168,9 @@ class CustomNuScenesDataset(NuScenesDataset):
                 ))
 
         if not self.test_mode:
-            annos = self.get_ann_info(index)
-            input_dict['ann_info'] = annos
+            input_dict['ann_info'] = self.parse_ann_info(info)
+        if self.test_mode and self.load_eval_anns:
+            input_dict['eval_ann_info'] = self.parse_ann_info(info)
 
         rotation = Quaternion(input_dict['ego2global_rotation'])
         translation = input_dict['ego2global_translation']
@@ -184,75 +185,110 @@ class CustomNuScenesDataset(NuScenesDataset):
 
         return input_dict
 
-    def __getitem__(self, idx):
-        """Get item from infos according to the given index.
-        Returns:
-            dict: Data dictionary of the corresponding index.
-        """
-        if self.test_mode:
-            return self.prepare_test_data(idx)
-        while True:
-
-            data = self.prepare_train_data(idx)
-            if data is None:
-                idx = self._rand_another(idx)
-                continue
-            return data
-
-    def _evaluate_single(self,
-                         result_path,
-                         logger=None,
-                         metric='bbox',
-                         result_name='pts_bbox'):
-        """Evaluation for a single model in nuScenes protocol.
+    def _filter_with_mask(self, ann_info: dict) -> dict:
+        """Remove annotations that do not need to be cared.
 
         Args:
-            result_path (str): Path of the result file.
-            logger (logging.Logger | str | None): Logger used for printing
-                related information during evaluation. Default: None.
-            metric (str): Metric name used for evaluation. Default: 'bbox'.
-            result_name (str): Result name in the metric prefix.
-                Default: 'pts_bbox'.
+            ann_info (dict): Dict of annotation infos.
 
         Returns:
-            dict: Dictionary of evaluation details.
+            dict: Annotations after filtering.
         """
-        from nuscenes import NuScenes
-        self.nusc = NuScenes(version=self.version, dataroot=self.data_root,
-                             verbose=True)
+        filtered_annotations = {}
+        if self.use_valid_flag:
+            filter_mask = ann_info['valid_flag']
+        else:
+            filter_mask = ann_info['num_lidar_pts'] > 0
+            # filter_mask = ann_info['']
+        for key in ann_info.keys():
+            if key != 'instances':
+                filtered_annotations[key] = (ann_info[key][filter_mask])
+            else:
+                filtered_annotations[key] = ann_info[key]
+        return filtered_annotations
+    
+    def parse_ann_info(self, info: dict):
+        """Process the `instances` in data info to `ann_info`.
 
-        output_dir = osp.join(*osp.split(result_path)[:-1])
+        In `Custom3DDataset`, we simply concatenate all the field
+        in `instances` to `np.ndarray`, you can do the specific
+        process in subclass. You have to convert `gt_bboxes_3d`
+        to different coordinates according to the task.
 
-        eval_set_map = {
-            'v1.0-mini': 'mini_val',
-            'v1.0-trainval': 'val',
+        Args:
+            info (dict): Info dict.
+
+        Returns:
+            dict or None: Processed `ann_info`.
+        """
+        # add s or gt prefix for most keys after concat
+        # we only process 3d annotations here, the corresponding
+        # 2d annotation process is in the `LoadAnnotations3D`
+        # in `transforms`
+        ann_list = ["gt_boxes", "gt_names", "gt_velocity", "num_lidar_pts", "num_radar_pts", "valid_flag"]
+        name_mapping = {
+            'gt_boxes': 'gt_bboxes_3d',
+            'gt_names': 'gt_labels_3d',
+            'gt_velocity': 'velocities',
         }
-        self.nusc_eval = NuScenesEval_custom(
-            self.nusc,
-            config=self.eval_detection_configs,
-            result_path=result_path,
-            eval_set=eval_set_map[self.version],
-            output_dir=output_dir,
-            verbose=True,
-            overlap_test=self.overlap_test,
-            data_infos=self.data_infos
-        )
-        self.nusc_eval.main(plot_examples=0, render_curves=False)
-        # record metrics
-        metrics = mmcv.load(osp.join(output_dir, 'metrics_summary.json'))
-        detail = dict()
-        metric_prefix = f'{result_name}_NuScenes'
-        for name in self.CLASSES:
-            for k, v in metrics['label_aps'][name].items():
-                val = float('{:.4f}'.format(v))
-                detail['{}/{}_AP_dist_{}'.format(metric_prefix, name, k)] = val
-            for k, v in metrics['label_tp_errors'][name].items():
-                val = float('{:.4f}'.format(v))
-                detail['{}/{}_{}'.format(metric_prefix, name, k)] = val
-            for k, v in metrics['tp_errors'].items():
-                val = float('{:.4f}'.format(v))
-                detail['{}/{}'.format(metric_prefix,
-                                      self.ErrNameMapping[k])] = val
-        detail['{}/NDS'.format(metric_prefix)] = metrics['nd_score']
-        detail['{}/mAP'.format(metric_prefix)] = metrics['mean_ap']
-        return detail
+        # empty gt
+        if len(info["gt_boxes"]) == 0:
+            return None
+        else:
+            ann_info = dict()
+            for ann_name in ann_list:
+                temp_anns = copy.deepcopy(info[ann_name])
+                if ann_name in name_mapping:
+                    mapped_ann_name = name_mapping[ann_name]
+                else:
+                    mapped_ann_name = ann_name
+                if ann_name == "gt_names":
+                    for ind, name in enumerate(temp_anns):
+                        if name in self.metainfo['classes']:
+                            temp_anns[ind] = self.metainfo['classes'].index(name)
+                        else:
+                            temp_anns[ind] = -1
+                    temp_anns = np.array(temp_anns).astype(np.int64)
+                elif ann_name in name_mapping:
+                    temp_anns = np.array(temp_anns).astype(np.float32) 
+                else:
+                    temp_anns = np.array(temp_anns)
+
+                ann_info[mapped_ann_name] = temp_anns
+
+            for label in ann_info['gt_labels_3d']:
+                if label != -1:
+                    self.num_ins_per_cat[label] += 1
+            ann_info = self._filter_with_mask(ann_info)
+            new_ann_info = dict()
+            if self.with_velocity:
+                ann_info['gt_bboxes_3d'] = np.hstack(
+                    (ann_info["gt_bboxes_3d"], 
+                     ann_info["velocities"]))
+            gt_bboxes_3d = LiDARInstance3DBoxes(
+                ann_info['gt_bboxes_3d'],
+                box_dim=ann_info['gt_bboxes_3d'].shape[-1],
+                origin=(0.5, 0.5, 0.5)).convert_to(self.box_mode_3d)
+            ann_info['gt_bboxes_3d'] = gt_bboxes_3d
+
+            return ann_info
+    
+    def parse_data_info(self, info: dict):
+        """Process the raw data info.
+
+        The only difference with it in `Det3DDataset`
+        is the specific process for `plane`.
+
+        Args:
+            info (dict): Raw info dict.
+
+        Returns:
+            List[dict] or dict: Has `ann_info` in training stage. And
+            all path has been converted to absolute path.
+        """
+        if not self.test_mode:
+            # used in training
+            info['ann_info'] = self.parse_ann_info(info)
+        if self.test_mode and self.load_eval_anns:
+            info['eval_ann_info'] = self.parse_ann_info(info)
+        return info

@@ -1,4 +1,6 @@
-from . import bev_pool_v2_ext
+import bev_pool_v2_ext
+import torch
+
 def bev_pool_v2(depth, feat, ranks_depth, ranks_feat, ranks_bev,
                 bev_feat_shape, interval_starts, interval_lengths):
     """

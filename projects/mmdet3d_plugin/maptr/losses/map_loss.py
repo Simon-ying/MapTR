@@ -30,7 +30,7 @@ def reduce_loss(loss, reduction):
     elif reduction_enum == 2:
         return loss.sum()
 
-@mmcv.jit(derivate=True, coderize=True)
+@mmcv.utils.jit(derivate=True, coderize=True)
 def custom_weight_dir_reduce_loss(loss, weight=None, reduction='mean', avg_factor=None):
     """Apply element-wise weight and reduce loss.
 
@@ -63,7 +63,7 @@ def custom_weight_dir_reduce_loss(loss, weight=None, reduction='mean', avg_facto
             raise ValueError('avg_factor can not be used with reduction="sum"')
     return loss
 
-@mmcv.jit(derivate=True, coderize=True)
+@mmcv.utils.jit(derivate=True, coderize=True)
 def custom_weight_reduce_loss(loss, weight=None, reduction='mean', avg_factor=None):
     """Apply element-wise weight and reduce loss.
 
@@ -187,7 +187,7 @@ def custom_weighted_dir_loss(loss_func):
 
     return wrapper
 
-@mmcv.jit(derivate=True, coderize=True)
+@mmcv.utils.jit(derivate=True, coderize=True)
 @custom_weighted_loss
 def ordered_pts_smooth_l1_loss(pred, target):
     """L1 loss.
@@ -207,7 +207,7 @@ def ordered_pts_smooth_l1_loss(pred, target):
     # import pdb;pdb.set_trace()
     return loss
 
-@mmcv.jit(derivate=True, coderize=True)
+@mmcv.utils.jit(derivate=True, coderize=True)
 @weighted_loss
 def pts_l1_loss(pred, target):
     """L1 loss.
@@ -225,7 +225,7 @@ def pts_l1_loss(pred, target):
     loss = torch.abs(pred - target)
     return loss
 
-@mmcv.jit(derivate=True, coderize=True)
+@mmcv.utils.jit(derivate=True, coderize=True)
 @custom_weighted_loss
 def ordered_pts_l1_loss(pred, target):
     """L1 loss.
@@ -244,7 +244,7 @@ def ordered_pts_l1_loss(pred, target):
     loss = torch.abs(pred - target)
     return loss
 
-@mmcv.jit(derivate=True, coderize=True)
+@mmcv.utils.jit(derivate=True, coderize=True)
 @custom_weighted_dir_loss
 def pts_dir_cos_loss(pred, target):
     """ Dir cosine similiarity loss

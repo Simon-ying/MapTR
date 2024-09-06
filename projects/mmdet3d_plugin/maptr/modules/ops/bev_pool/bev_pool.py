@@ -1,6 +1,6 @@
 import torch
 
-from . import bev_pool_ext
+import bev_pool_ext
 
 
 class QuickCumsum(torch.autograd.Function):
