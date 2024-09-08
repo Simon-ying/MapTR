@@ -34,7 +34,7 @@ def main():
             for cam in CAMS[:3]:
                 cam_img_name = 'CAM_'+ cam + '.jpg'
                 cam_img = cv2.imread(osp.join(file_path, cam_img_name))
-                # import pdb;pdb.set_trace()
+                
                 lw = 8
                 tf = max(lw - 1, 1)
                 w, h = cv2.getTextSize(cam, 0, fontScale=lw / 3, thickness=tf)[0]  # text width, height
@@ -57,7 +57,7 @@ def main():
                 cam_img = cv2.imread(osp.join(file_path, cam_img_name))
                 if cam == 'BACK':
                     cam_img = cv2.flip(cam_img, 1)
-                # import pdb;pdb.set_trace()
+                
                 lw = 8
                 tf = max(lw - 1, 1)
                 w, h = cv2.getTextSize(cam, 0, fontScale=lw / 3, thickness=tf)[0]  # text width, height

@@ -219,7 +219,7 @@ class MapTRHead(DETRHead):
 
         bs, num_cam, _, _, _ = mlvl_feats[0].shape
         dtype = mlvl_feats[0].dtype
-        # import pdb;pdb.set_trace()
+        
         if self.query_embed_type == 'all_pts':
             object_query_embeds = self.query_embedding.weight.to(dtype)
         elif self.query_embed_type == 'instance_pts':
@@ -274,12 +274,12 @@ class MapTRHead(DETRHead):
         outputs_pts_coords = []
         for lvl in range(hs.shape[0]):
             if lvl == 0:
-                # import pdb;pdb.set_trace()
+                
                 reference = init_reference
             else:
                 reference = inter_references[lvl - 1]
             reference = inverse_sigmoid(reference)
-            # import pdb;pdb.set_trace()
+            
             # vec_embedding = hs[lvl].reshape(bs, self.num_vec, -1)
             outputs_class = self.cls_branches[lvl](hs[lvl]
                                             .view(bs,self.num_vec, self.num_pts_per_vec,-1)
@@ -291,7 +291,7 @@ class MapTRHead(DETRHead):
             tmp[..., 0:2] += reference[..., 0:2]
             # tmp[..., 0:2] = tmp[..., 0:2].sigmoid()
             tmp = tmp.sigmoid() # cx,cy,w,h
-            # import pdb;pdb.set_trace()
+            
             # tmp[..., 0:1] = (tmp[..., 0:1] * (self.pc_range[3] -
             #                  self.pc_range[0]) + self.pc_range[0])
             # tmp[..., 1:2] = (tmp[..., 1:2] * (self.pc_range[4] -
@@ -335,7 +335,7 @@ class MapTRHead(DETRHead):
         pts_y = pts_reshape[:, :, :, 0] if y_first else pts_reshape[:, :, :, 1]
         pts_x = pts_reshape[:, :, :, 1] if y_first else pts_reshape[:, :, :, 0]
         if self.transform_method == 'minmax':
-            # import pdb;pdb.set_trace()
+            
 
             xmin = pts_x.min(dim=2, keepdim=True)[0]
             xmax = pts_x.max(dim=2, keepdim=True)[0]
@@ -377,11 +377,11 @@ class MapTRHead(DETRHead):
                 - pos_inds (Tensor): Sampled positive indices for each image.
                 - neg_inds (Tensor): Sampled negative indices for each image.
         """
-        # import pdb;pdb.set_trace()
+        
         num_bboxes = bbox_pred.size(0)
         # assigner and sampler
         gt_c = gt_bboxes.shape[-1]
-        # import pdb;pdb.set_trace()
+        
         assign_result, order_index = self.assigner.assign(bbox_pred, cls_score, pts_pred,
                                              gt_bboxes, gt_labels, gt_shifts_pts,
                                              gt_bboxes_ignore)
@@ -392,7 +392,7 @@ class MapTRHead(DETRHead):
         #                                       gt_pts)
 
         
-        # import pdb;pdb.set_trace()
+        
         pos_inds = sampling_result.pos_inds
         neg_inds = sampling_result.neg_inds
 
@@ -409,11 +409,11 @@ class MapTRHead(DETRHead):
         bbox_weights[pos_inds] = 1.0
 
         # pts targets
-        # import pdb;pdb.set_trace()
+        
         # pts_targets = torch.zeros_like(pts_pred)
         # num_query, num_order, num_points, num_coords
         if order_index is None:
-            # import pdb;pdb.set_trace()
+            
             assigned_shift = gt_labels[sampling_result.pos_assigned_gt_inds]
         else:
             assigned_shift = order_index[sampling_result.pos_inds, sampling_result.pos_assigned_gt_inds]
@@ -516,14 +516,14 @@ class MapTRHead(DETRHead):
         cls_scores_list = [cls_scores[i] for i in range(num_imgs)]
         bbox_preds_list = [bbox_preds[i] for i in range(num_imgs)]
         pts_preds_list = [pts_preds[i] for i in range(num_imgs)]
-        # import pdb;pdb.set_trace()
+        
         cls_reg_targets = self.get_targets(cls_scores_list, bbox_preds_list,pts_preds_list,
                                            gt_bboxes_list, gt_labels_list,gt_shifts_pts_list,
                                            gt_bboxes_ignore_list)
         (labels_list, label_weights_list, bbox_targets_list, bbox_weights_list,
          pts_targets_list, pts_weights_list,
          num_total_pos, num_total_neg) = cls_reg_targets
-        # import pdb;pdb.set_trace()
+        
         labels = torch.cat(labels_list, 0)
         label_weights = torch.cat(label_weights_list, 0)
         bbox_targets = torch.cat(bbox_targets_list, 0)
@@ -549,7 +549,7 @@ class MapTRHead(DETRHead):
         num_total_pos = loss_cls.new_tensor([num_total_pos])
         num_total_pos = torch.clamp(reduce_mean(num_total_pos), min=1).item()
 
-        # import pdb;pdb.set_trace()
+        
         # regression L1 loss
         bbox_preds = bbox_preds.reshape(-1, bbox_preds.size(-1))
         normalized_bbox_targets = normalize_2d_bbox(bbox_targets, self.pc_range)
@@ -564,7 +564,7 @@ class MapTRHead(DETRHead):
 
         # regression pts CD loss
         # pts_preds = pts_preds
-        # import pdb;pdb.set_trace()
+        
         
         # num_samples, num_order, num_pts, num_coords
         normalized_pts_targets = normalize_2d_pts(pts_targets, self.pc_range)
@@ -577,7 +577,7 @@ class MapTRHead(DETRHead):
                                     align_corners=True)
             pts_preds = pts_preds.permute(0,2,1).contiguous()
 
-        # import pdb;pdb.set_trace()
+        
         loss_pts = self.loss_pts(
             pts_preds[isnotnan,:,:], normalized_pts_targets[isnotnan,
                                                             :,:], 
@@ -588,7 +588,7 @@ class MapTRHead(DETRHead):
         denormed_pts_preds_dir = denormed_pts_preds[:,self.dir_interval:,:] - denormed_pts_preds[:,:-self.dir_interval,:]
         pts_targets_dir = pts_targets[:, self.dir_interval:,:] - pts_targets[:,:-self.dir_interval,:]
         # dir_weights = pts_weights[:, indice,:-1,0]
-        # import pdb;pdb.set_trace()
+        
         loss_dir = self.loss_dir(
             denormed_pts_preds_dir[isnotnan,:,:], pts_targets_dir[isnotnan,
                                                                           :,:],
@@ -646,7 +646,7 @@ class MapTRHead(DETRHead):
             f'{self.__class__.__name__} only supports ' \
             f'for gt_bboxes_ignore setting to None.'
         gt_vecs_list = copy.deepcopy(gt_bboxes_list)
-        # import pdb;pdb.set_trace()
+        
         all_cls_scores = preds_dicts['all_cls_scores']
         all_bbox_preds = preds_dicts['all_bbox_preds']
         all_pts_preds  = preds_dicts['all_pts_preds']
@@ -660,7 +660,7 @@ class MapTRHead(DETRHead):
         # gt_bboxes_list = [torch.cat(
         #     (gt_bboxes.gravity_center, gt_bboxes.tensor[:, 3:]),
         #     dim=1).to(device) for gt_bboxes in gt_bboxes_list]
-        # import pdb;pdb.set_trace()
+        
         # gt_bboxes_list = [
         #     gt_bboxes.to(device) for gt_bboxes in gt_bboxes_list]
         gt_bboxes_list = [
@@ -691,7 +691,7 @@ class MapTRHead(DETRHead):
         all_gt_bboxes_ignore_list = [
             gt_bboxes_ignore for _ in range(num_dec_layers)
         ]
-        # import pdb;pdb.set_trace()
+        
         losses_cls, losses_bbox, losses_iou, losses_pts, losses_dir = multi_apply(
             self.loss_single, all_cls_scores, all_bbox_preds,all_pts_preds,
             all_gt_bboxes_list, all_gt_labels_list,all_gt_shifts_pts_list,

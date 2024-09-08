@@ -61,7 +61,7 @@ class BaseTransform(BaseModule):
         iH = img_metas[0]['img_shape'][0][0]
         iW = img_metas[0]['img_shape'][0][1]
         assert iH // self.feat_down_sample == fH
-        # import pdb;pdb.set_trace()
+        
         ds = (
             torch.arange(*self.dbound, dtype=torch.float)
             .view(-1, 1, 1)
@@ -156,7 +156,7 @@ class BaseTransform(BaseModule):
     ):
         B, N, _, _ = lidar2img.shape
         device = lidar2img.device
-        # import pdb;pdb.set_trace()
+        
         if self.frustum == None:
             self.frustum = self.create_frustum(fH,fW,img_metas)
             self.frustum = self.frustum.to(device)
@@ -172,7 +172,7 @@ class BaseTransform(BaseModule):
                                     points.unsqueeze(-1).to(torch.float32)).squeeze(-1)
         # points = torch.matmul(img2lidar.to(torch.float32),
         #                       points.unsqueeze(-1).to(torch.float32)).squeeze(-1)
-        # import pdb;pdb.set_trace()
+        
         eps = 1e-5
         points = points[..., 0:3] / torch.maximum(
             points[..., 3:4], torch.ones_like(points[..., 3:4]) * eps)
@@ -251,7 +251,7 @@ class BaseTransform(BaseModule):
         lidar2ego = np.asarray(lidar2ego)
         lidar2ego = images.new_tensor(lidar2ego)  # (B, N, 4, 4)
 
-        # import pdb;pdb.set_trace()
+        
         # lidar2cam = torch.linalg.solve(camera2ego, lidar2ego.view(B,1,4,4).repeat(1,N,1,1))
         # lidar2oriimg = torch.matmul(camera_intrinsics,lidar2cam)
         # mylidar2img = torch.matmul(img_aug_matrix,lidar2oriimg)
@@ -288,7 +288,7 @@ class BaseTransform(BaseModule):
         mlp_input = self.get_mlp_input(camera2ego, camera_intrinsics, post_rots, post_trans)
         x, depth = self.get_cam_feats(images, mlp_input)
         x = self.bev_pool(geom, x)
-        # import pdb;pdb.set_trace()
+        
         x = x.permute(0,1,3,2).contiguous()
         
         return x, depth
@@ -704,7 +704,7 @@ class BaseTransformV2(BaseModule):
             coor, depth,
             tran_feat)
         # x = self.bev_pool(geom, x)
-        # import ipdb;ipdb.set_trace()
+        
         # bev_feat = bev_feat.permute(0,1,3,2).contiguous()
         
         return bev_feat, depth
@@ -895,7 +895,7 @@ class BEVFormerEncoderDepth(BEVFormerEncoder):
             prev_bev=prev_bev,
             shift=shift,
             **kwargs)
-        # import ipdb; ipdb.set_trace()
+        
         images = mlvl_feats[0]
         img_metas = kwargs['img_metas']
         B, N, C, fH, fW = images.shape
@@ -981,14 +981,14 @@ class BEVFormerEncoderDepth(BEVFormerEncoder):
         return gt_depths.float()
 
     def get_depth_loss(self, depth_labels, depth_preds):
-        # import pdb;pdb.set_trace()
+        
         if depth_preds is None:
             return 0
         
         depth_labels = self.get_downsampled_gt_depth(depth_labels)
         depth_preds = depth_preds.permute(0, 1, 3, 4, 2).contiguous().view(-1, self.D)
         # fg_mask = torch.max(depth_labels, dim=1).values > 0.0 # 只计算有深度的前景的深度loss
-        # import pdb;pdb.set_trace()
+        
         fg_mask = depth_labels > 0.0 # 只计算有深度的前景的深度loss
         depth_labels = depth_labels[fg_mask]
         depth_preds = depth_preds[fg_mask]
@@ -999,7 +999,7 @@ class BEVFormerEncoderDepth(BEVFormerEncoder):
                 reduction='none',
             ).sum() / max(1.0, fg_mask.sum())
         # if depth_loss <= 0.:
-        #     import pdb;pdb.set_trace()
+        
         return self.loss_depth_weight * depth_loss
 
     def get_mlp_input(self, sensor2ego, intrin, post_rot, post_tran):
@@ -1045,7 +1045,7 @@ class LSSTransform(BaseTransform):
             voxel_size=voxel_size,
             dbound=dbound,
         )
-        # import pdb;pdb.set_trace()
+        
         self.loss_depth_weight = loss_depth_weight
         self.grid_config = grid_config
         self.depth_net = DepthNet(in_channels, in_channels,
@@ -1130,14 +1130,14 @@ class LSSTransform(BaseTransform):
         return gt_depths.float()
 
     def get_depth_loss(self, depth_labels, depth_preds):
-        # import pdb;pdb.set_trace()
+        
         if depth_preds is None:
             return 0
         
         depth_labels = self.get_downsampled_gt_depth(depth_labels)
         depth_preds = depth_preds.permute(0, 1, 3, 4, 2).contiguous().view(-1, self.D)
         # fg_mask = torch.max(depth_labels, dim=1).values > 0.0 # 只计算有深度的前景的深度loss
-        # import pdb;pdb.set_trace()
+        
         fg_mask = depth_labels > 0.0 # 只计算有深度的前景的深度loss
         depth_labels = depth_labels[fg_mask]
         depth_preds = depth_preds[fg_mask]
@@ -1148,7 +1148,7 @@ class LSSTransform(BaseTransform):
                 reduction='none',
             ).sum() / max(1.0, fg_mask.sum())
         # if depth_loss <= 0.:
-        #     import pdb;pdb.set_trace()
+        
         return self.loss_depth_weight * depth_loss
 
     def get_mlp_input(self, sensor2ego, intrin, post_rot, post_tran):
@@ -1279,14 +1279,14 @@ class LSSTransformV2(BaseTransformV2):
         return gt_depths.float()
     
     def get_depth_loss(self, depth_labels, depth_preds):
-        # import pdb;pdb.set_trace()
+        
         if depth_preds is None:
             return 0
         
         depth_labels = self.get_downsampled_gt_depth(depth_labels)
         depth_preds = depth_preds.permute(0, 1, 3, 4, 2).contiguous().view(-1, self.D)
         # fg_mask = torch.max(depth_labels, dim=1).values > 0.0 # 只计算有深度的前景的深度loss
-        # import pdb;pdb.set_trace()
+        
         fg_mask = depth_labels > 0.0 # 只计算有深度的前景的深度loss
         depth_labels = depth_labels[fg_mask]
         depth_preds = depth_preds[fg_mask]
@@ -1297,7 +1297,7 @@ class LSSTransformV2(BaseTransformV2):
                 reduction='none',
             ).sum() / max(1.0, fg_mask.sum())
         # if depth_loss <= 0.:
-        #     import pdb;pdb.set_trace()
+        
         return self.loss_depth_weight * depth_loss
         
 

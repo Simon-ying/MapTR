@@ -194,7 +194,7 @@ class DecoupledDetrTransformerDecoderLayer(BaseTransformerLayer):
         num_pts_per_vec = kwargs['num_pts_per_vec']
         for layer in self.operation_order:
             if layer == 'self_attn':
-                # import ipdb;ipdb.set_trace()
+                
                 if attn_index == 0:
                     n_pts, n_batch, n_dim = query.shape
                     query = query.view(num_vec, num_pts_per_vec,n_batch,n_dim).flatten(1,2)
@@ -210,13 +210,13 @@ class DecoupledDetrTransformerDecoderLayer(BaseTransformerLayer):
                         attn_mask=kwargs['self_attn_mask'],
                         key_padding_mask=query_key_padding_mask,
                         **kwargs)
-                    # import ipdb;ipdb.set_trace()
+                    
                     query = query.view(num_vec, num_pts_per_vec, n_batch, n_dim).flatten(0,1)
                     query_pos = query_pos.view(num_vec, num_pts_per_vec, n_batch, n_dim).flatten(0,1)
                     attn_index += 1
                     identity = query
                 else:
-                    # import ipdb;ipdb.set_trace()
+                    
                     n_pts, n_batch, n_dim = query.shape
                     query = query.view(num_vec, num_pts_per_vec,n_batch,n_dim).permute(1,0,2,3).contiguous().flatten(1,2)
                     query_pos = query_pos.view(num_vec, num_pts_per_vec,n_batch,n_dim).permute(1,0,2,3).contiguous().flatten(1,2)
@@ -231,7 +231,7 @@ class DecoupledDetrTransformerDecoderLayer(BaseTransformerLayer):
                         attn_mask=attn_masks[attn_index],
                         key_padding_mask=query_key_padding_mask,
                         **kwargs)
-                    # import ipdb;ipdb.set_trace()
+                    
                     query = query.view(num_pts_per_vec, num_vec, n_batch, n_dim).permute(1,0,2,3).contiguous().flatten(0,1)
                     query_pos = query_pos.view(num_pts_per_vec, num_vec, n_batch, n_dim).permute(1,0,2,3).contiguous().flatten(0,1)
                     attn_index += 1

@@ -172,7 +172,7 @@ def format_res_gt_by_classes(result_path,
 
         show_dir = osp.join(output_dir,'vis_json')
         mmcv.mkdir_or_exist(osp.abspath(show_dir))
-        # import pdb;pdb.set_trace()
+        
         car_img = Image.open('./figs/lidar_car.png')
         colors_plt = ['r', 'b', 'g']
         for i in range(20):
@@ -212,7 +212,7 @@ def format_res_gt_by_classes(result_path,
                     zip(gen_results, annotations))   
         # gengts = map(partial(get_cls_results, num_sample=num_fixed_sample_pts, class_id=i,fix_interval=fix_interval),
         #             zip(gen_results, annotations))
-        # import pdb;pdb.set_trace()
+        
         gens, gts = tuple(zip(*gengts))
         cls_gens[clsname] = gens
         cls_gts[clsname] = gts
@@ -256,7 +256,6 @@ def eval_map(gen_results,
         # at the top level.
 
         # tpfp = tpfp_fn(cls_gen[i], cls_gt[i],threshold=threshold, metric=metric)
-        # import pdb; pdb.set_trace()
         # TODO this is a hack
         tpfp_fn = partial(tpfp_fn, threshold=threshold, metric=metric, code_size=code_size)
         args = []
@@ -264,7 +263,7 @@ def eval_map(gen_results,
         tpfp = pool.starmap(
             tpfp_fn,
             zip(cls_gen, cls_gt, *args))
-        # import pdb;pdb.set_trace()
+        
         tp, fp = tuple(zip(*tpfp))
 
 
@@ -284,7 +283,6 @@ def eval_map(gen_results,
         #     print(tpfp)
         # i = 0 
         # tpfp = tpfp_fn(cls_gen[i], cls_gt[i],threshold=threshold)
-        # import pdb; pdb.set_trace()
 
         # XXX
         
@@ -293,7 +291,7 @@ def eval_map(gen_results,
             num_gts += bbox.shape[0]
 
         # sort all det bboxes by score, also sort tp and fp
-        # import pdb;pdb.set_trace()
+        
         cls_gen = np.vstack(cls_gen)
         num_dets = cls_gen.shape[0]
         sort_inds = np.argsort(-cls_gen[:, -1]) #descending, high score front

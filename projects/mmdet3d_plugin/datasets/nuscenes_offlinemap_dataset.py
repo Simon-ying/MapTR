@@ -19,6 +19,7 @@ from shapely import affinity, ops
 from shapely.geometry import LineString, box, MultiPolygon, MultiLineString
 import json
 import cv2
+import pickle
 
 def add_rotation_noise(extrinsics, std=0.01, mean=0.0):
     #n = extrinsics.shape[0]
@@ -50,7 +51,6 @@ def add_rotation_noise(extrinsics, std=0.01, mean=0.0):
 
     rotation = torch.from_numpy(extrinsics.astype(np.float32))
     rotation[:3, -1] = 0.0
-    # import pdb;pdb.set_trace()
     rotation = rotation_matrix @ rotation
     extrinsics[:3, :3] = rotation[:3, :3].numpy()
     return extrinsics
@@ -258,7 +258,6 @@ class LiDARInstanceLines(object):
         instances_list = []
         is_poly = False
         # is_line = False
-        # import pdb;pdb.set_trace()
         for fixed_num_pts in fixed_num_sampled_points:
             # [fixed_num, 2]
             is_poly = fixed_num_pts[0].equal(fixed_num_pts[-1])
@@ -304,7 +303,7 @@ class LiDARInstanceLines(object):
         assert len(self.instance_list) != 0
         instances_list = []
         for idx, instance in enumerate(self.instance_list):
-            # import ipdb;ipdb.set_trace()
+            
             instance_label = self.instance_labels[idx]
             distances = np.linspace(0, instance.length, self.fixed_num)
             poly_pts = np.array(list(instance.coords))
@@ -317,7 +316,7 @@ class LiDARInstanceLines(object):
             shift_num = pts_num - 1
             final_shift_num = self.fixed_num - 1
             if instance_label == 3:
-                # import ipdb;ipdb.set_trace()
+                
                 sampled_points = np.array([list(instance.interpolate(distance).coords) for distance in distances]).reshape(-1, 2)
                 shift_pts_list.append(sampled_points)
             else:
@@ -331,7 +330,6 @@ class LiDARInstanceLines(object):
                         shift_instance = LineString(shift_pts)
                         shift_sampled_points = np.array([list(shift_instance.interpolate(distance).coords) for distance in distances]).reshape(-1, 2)
                         shift_pts_list.append(shift_sampled_points)
-                    # import pdb;pdb.set_trace()
                 else:
                     sampled_points = np.array([list(instance.interpolate(distance).coords) for distance in distances]).reshape(-1, 2)
                     flip_sampled_points = np.flip(sampled_points, axis=0)
@@ -563,7 +561,6 @@ class VectorizedLocalMap(object):
             instance_list = map_annotation[vec_class]
             for instance in instance_list:
                 vectors.append((LineString(np.array(instance)), self.CLASS2LABEL.get(vec_class, -1))) 
-        # import pdb;pdb.set_trace()
         filtered_vectors = []
         gt_pts_loc_3d = []
         gt_pts_num_3d = []
@@ -575,11 +572,11 @@ class VectorizedLocalMap(object):
                     gt_semantic_mask = np.zeros((1, self.canvas_size[0], self.canvas_size[1]), dtype=np.uint8)
                 else:
                     gt_semantic_mask = None
-                # import ipdb;ipdb.set_trace()
+                
                 if self.aux_seg['pv_seg']:
                     num_cam  = len(example['img_metas'].data['pad_shape'])
                     img_shape = example['img_metas'].data['pad_shape'][0]
-                    # import ipdb;ipdb.set_trace()
+                    
                     gt_pv_semantic_mask = np.zeros((num_cam, 1, img_shape[0] // feat_down_sample, img_shape[1] // feat_down_sample), dtype=np.uint8)
                     lidar2img = example['img_metas'].data['lidar2img']
                     scale_factor = np.eye(4)
@@ -1020,6 +1017,7 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
                     seg_classes=1,
                     feat_down_sample=32,
                  ),
+                 is_vis_on_test = False,
                  *args, 
                  **kwargs):
         super().__init__(*args, **kwargs)
@@ -1041,9 +1039,10 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
                                              fixed_ptsnum_per_line=fixed_ptsnum_per_line,
                                              padding_value=self.padding_value,
                                              aux_seg=aux_seg)
-        self.is_vis_on_test = False
+        self.is_vis_on_test = is_vis_on_test
         self.noise = noise
         self.noise_std = noise_std
+    
     @classmethod
     def get_map_classes(cls, map_classes=None):
         """Get class names of current dataset.
@@ -1080,7 +1079,7 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
                                 padding_value=0, cpu_only=False
                   'gt_bboxes_3d': stack=False, cpu_only=True
         '''
-        # import ipdb;ipdb.set_trace()
+        
 
         anns_results = self.vector_map.gen_vectorized_samples(input_dict['annotation'] if 'annotation' in input_dict.keys() else input_dict['ann_info'],
                      example=example, feat_down_sample=self.aux_seg['feat_down_sample'])
@@ -1134,10 +1133,8 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
             return None
         frame_idx = input_dict['frame_idx']
         scene_token = input_dict['scene_token']
-        self.pre_pipeline(input_dict)
-        # import pdb;pdb.set_trace()
         example = self.pipeline(input_dict)
-        example = self.vectormap_pipeline(example,input_dict)
+        example = self.vectormap_pipeline(example, input_dict)
         if self.filter_empty_gt and \
                 (example is None or ~(example['gt_labels_3d']._data != -1).any()):
             return None
@@ -1162,7 +1159,7 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
         """
         convert sample queue into one single sample.
         """
-        # import ipdb;ipdb.set_trace()
+        
         imgs_list = [each['img'].data for each in queue]
         metas_map = {}
         prev_pos = None
@@ -1226,7 +1223,21 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
                     from lidar to different cameras.
                 - ann_info (dict): Annotation info.
         """
-        info = self.data_infos[index]
+        if self.serialize_data:
+            start_addr = 0 if index == 0 else self.data_address[index - 1].item()
+            end_addr = self.data_address[index].item()
+            bytes = memoryview(
+                self.data_bytes[start_addr:end_addr])  # type: ignore
+            info = pickle.loads(bytes)  # type: ignore
+        else:
+            info = copy.deepcopy(self.data_list[index])
+        # Some codebase needs `sample_idx` of data information. Here we convert
+        # the idx to a positive number and save it in data information.
+        if index >= 0:
+            info['sample_idx'] = index
+        else:
+            info['sample_idx'] = len(self) + index
+
         # standard protocal modified from SECOND.Pytorch
         input_dict = dict(
             sample_idx=info['token'],
@@ -1337,6 +1348,7 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
         ego2global[:3, 3] = input_dict['ego2global_translation']
         lidar2global = ego2global @ lidar2ego
         input_dict['lidar2global'] = lidar2global
+        input_dict['is_vis_on_test'] = self.is_vis_on_test
         return input_dict
 
     def prepare_test_data(self, index):
@@ -1374,7 +1386,7 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
         assert self.map_ann_file is not None
         if (not os.path.exists(self.map_ann_file)) :
             dataset_length = len(self)
-            prog_bar = mmcv.ProgressBar(dataset_length)
+            prog_bar = mmengine.ProgressBar(dataset_length)
             mapped_class_names = self.MAPCLASSES
             for sample_id in range(dataset_length):
                 sample_token = self.data_infos[sample_id]['token']
@@ -1403,7 +1415,7 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
                 'GTs': gt_annos
             }
             print('\n GT anns writes to', self.map_ann_file)
-            mmcv.dump(nusc_submissions, self.map_ann_file)
+            mmengine.dump(nusc_submissions, self.map_ann_file)
         else:
             print(f'{self.map_ann_file} exist, not update')
 
@@ -1422,7 +1434,6 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
         assert self.map_ann_file is not None
         pred_annos = []
         mapped_class_names = self.MAPCLASSES
-        # import pdb;pdb.set_trace()
         print('Start to convert map detection format...')
         for sample_id, det in enumerate(mmengine.track_iter_progress(results)):
             pred_anno = {}
@@ -1462,7 +1473,6 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
 
     def to_gt_vectors(self,
                       gt_dict):
-        # import pdb;pdb.set_trace()
         gt_labels = gt_dict['gt_labels_3d'].data
         gt_instances = gt_dict['gt_bboxes_3d'].data.instance_list
 
@@ -1615,6 +1625,11 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
         if show:
             self.show(results, out_dir, pipeline=pipeline)
         return results_dict
+
+    def parse_data_info(self, info: dict) -> dict:
+        """Process the raw data info.
+        """
+        return info
 
 
 def output_to_vecs(detection):

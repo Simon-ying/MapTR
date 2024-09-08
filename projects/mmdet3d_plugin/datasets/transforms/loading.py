@@ -10,9 +10,9 @@ import mmcv
 from mmdet3d.structures.points import BasePoints, get_points_type
 from mmdet3d.registry import TRANSFORMS
 from mmcv.transforms import BaseTransform
-
+import cv2 as cv
 from .loading_utils import load_augmented_point_cloud, reduce_LiDAR_beams
-
+import open3d as o3d
 import torch
 from pyquaternion import Quaternion
 
@@ -61,7 +61,7 @@ class CustomLoadMultiViewImageFromFiles(BaseTransform):
         max_h = max([shape[0] for shape in img_shape_list])
         max_w = max([shape[1] for shape in img_shape_list])
         size = (max_h, max_w)
-        # import pdb;pdb.set_trace()
+        
         img_list = [mmcv.impad(
                     img, shape=size, pad_val=self.pad_val) for img in img_list]
 
@@ -82,6 +82,12 @@ class CustomLoadMultiViewImageFromFiles(BaseTransform):
             mean=np.zeros(num_channels, dtype=np.float32),
             std=np.ones(num_channels, dtype=np.float32),
             to_rgb=False)
+        if results.get('is_vis_on_test', False):
+            dir_name = "./tmp/CustomLoadMultiViewImageFromFiles"
+            os.makedirs(dir_name, exist_ok=True)
+            for i in range(len(results['img'])):
+                img_name = results['img_filename'][i].split("/")[-1]
+                mmcv.imwrite(results['img'][i], os.path.join(dir_name, img_name))
         return results
 
     def __repr__(self):
@@ -251,98 +257,114 @@ class CustomLoadPointsFromMultiSweeps(BaseTransform):
 class CustomLoadPointsFromFile(BaseTransform):
     """Load Points From File.
 
-    Load sunrgbd and scannet points from file.
+    Required Keys:
+
+    - lidar_points (dict)
+
+        - lidar_path (str)
+
+    Added Keys:
+
+    - points (np.float32)
 
     Args:
         coord_type (str): The type of coordinates of points cloud.
             Available options includes:
+
             - 'LIDAR': Points in LiDAR coordinates.
             - 'DEPTH': Points in depth coordinates, usually for indoor dataset.
             - 'CAMERA': Points in camera coordinates.
-        load_dim (int): The dimension of the loaded points.
-            Defaults to 6.
-        use_dim (list[int]): Which dimensions of the points to be used.
+        load_dim (int): The dimension of the loaded points. Defaults to 6.
+        use_dim (list[int] | int): Which dimensions of the points to use.
             Defaults to [0, 1, 2]. For KITTI dataset, set use_dim=4
             or use_dim=[0, 1, 2, 3] to use the intensity dimension.
         shift_height (bool): Whether to use shifted height. Defaults to False.
         use_color (bool): Whether to use color features. Defaults to False.
+        norm_intensity (bool): Whether to normlize the intensity. Defaults to
+            False.
+        norm_elongation (bool): Whether to normlize the elongation. This is
+            usually used in Waymo dataset.Defaults to False.
+        backend_args (dict, optional): Arguments to instantiate the
+            corresponding backend. Defaults to None.
     """
 
-    def __init__(
-        self,
-        coord_type,
-        load_dim=6,
-        use_dim=[0, 1, 2],
-        shift_height=False,
-        use_color=False,
-        load_augmented=None,
-        reduce_beams=None,
-    ):
+    def __init__(self,
+                 coord_type,
+                 load_dim = 6,
+                 use_dim = [0, 1, 2],
+                 shift_height = False,
+                 use_color = False,
+                 norm_intensity = False,
+                 norm_elongation = False,
+                 backend_args = None):
         self.shift_height = shift_height
         self.use_color = use_color
         if isinstance(use_dim, int):
             use_dim = list(range(use_dim))
-        assert (
-            max(use_dim) < load_dim
-        ), f"Expect all used dimensions < {load_dim}, got {use_dim}"
-        assert coord_type in ["CAMERA", "LIDAR", "DEPTH"]
+        assert max(use_dim) < load_dim, \
+            f'Expect all used dimensions < {load_dim}, got {use_dim}'
+        assert coord_type in ['CAMERA', 'LIDAR', 'DEPTH']
 
         self.coord_type = coord_type
         self.load_dim = load_dim
         self.use_dim = use_dim
-        self.load_augmented = load_augmented
-        self.reduce_beams = reduce_beams
+        self.norm_intensity = norm_intensity
+        self.norm_elongation = norm_elongation
+        self.backend_args = backend_args
 
-    def _load_points(self, lidar_path):
+    def _load_points(self, pts_filename):
         """Private function to load point clouds data.
 
         Args:
-            lidar_path (str): Filename of point clouds data.
+            pts_filename (str): Filename of point clouds data.
 
         Returns:
             np.ndarray: An array containing point clouds data.
         """
-        mmengine.check_file_exist(lidar_path)
-        if self.load_augmented:
-            assert self.load_augmented in ["pointpainting", "mvp"]
-            virtual = self.load_augmented == "mvp"
-            points = load_augmented_point_cloud(
-                lidar_path, virtual=virtual, reduce_beams=self.reduce_beams
-            )
-        elif lidar_path.endswith(".npy"):
-            points = np.load(lidar_path)
-        else:
-            points = np.fromfile(lidar_path, dtype=np.float32)
+        try:
+            pts_bytes = mmengine.get(pts_filename, backend_args=self.backend_args)
+            points = np.frombuffer(pts_bytes, dtype=np.float32)
+        except ConnectionError:
+            mmengine.check_file_exist(pts_filename)
+            if pts_filename.endswith('.npy'):
+                points = np.load(pts_filename)
+            else:
+                points = np.fromfile(pts_filename, dtype=np.float32)
 
         return points
 
     def transform(self, results):
-        """Call function to load points data from file.
+        """Method to load points data from file.
 
         Args:
             results (dict): Result dict containing point clouds data.
 
         Returns:
-            dict: The result dict containing the point clouds data. \
-                Added key and value are described below.
+            dict: The result dict containing the point clouds data.
+            Added key and value are described below.
 
                 - points (:obj:`BasePoints`): Point clouds data.
         """
-        lidar_path = results["lidar_path"]
-        points = self._load_points(lidar_path)
+        pts_file_path = results['lidar_path']
+        points = self._load_points(pts_file_path)
         points = points.reshape(-1, self.load_dim)
-        # TODO: make it more general
-        if self.reduce_beams and self.reduce_beams < 32:
-            points = reduce_LiDAR_beams(points, self.reduce_beams)
         points = points[:, self.use_dim]
+        if self.norm_intensity:
+            assert len(self.use_dim) >= 4, \
+                f'When using intensity norm, expect used dimensions >= 4, got {len(self.use_dim)}'  # noqa: E501
+            points[:, 3] = np.tanh(points[:, 3])
+        if self.norm_elongation:
+            assert len(self.use_dim) >= 5, \
+                f'When using elongation norm, expect used dimensions >= 5, got {len(self.use_dim)}'  # noqa: E501
+            points[:, 4] = np.tanh(points[:, 4])
         attribute_dims = None
 
         if self.shift_height:
             floor_height = np.percentile(points[:, 2], 0.99)
             height = points[:, 2] - floor_height
             points = np.concatenate(
-                [points[:, :3], np.expand_dims(height, 1), points[:, 3:]], 1
-            )
+                [points[:, :3],
+                 np.expand_dims(height, 1), points[:, 3:]], 1)
             attribute_dims = dict(height=3)
 
         if self.use_color:
@@ -350,21 +372,26 @@ class CustomLoadPointsFromFile(BaseTransform):
             if attribute_dims is None:
                 attribute_dims = dict()
             attribute_dims.update(
-                dict(
-                    color=[
-                        points.shape[1] - 3,
-                        points.shape[1] - 2,
-                        points.shape[1] - 1,
-                    ]
-                )
-            )
+                dict(color=[
+                    points.shape[1] - 3,
+                    points.shape[1] - 2,
+                    points.shape[1] - 1,
+                ]))
 
         points_class = get_points_type(self.coord_type)
         points = points_class(
-            points, points_dim=points.shape[-1], attribute_dims=attribute_dims
-        )
-        results["points"] = points
+            points, points_dim=points.shape[-1], attribute_dims=attribute_dims)
+        results['points'] = points
 
+        if results.get('is_vis_on_test', False):
+            dir_name = "./tmp/CustomLoadPointsFromFile"
+            os.makedirs(dir_name, exist_ok=True)
+            pcd = o3d.geometry.PointCloud()
+            save_points = np.array(points)[:, :3]
+            pcd.points = o3d.utility.Vector3dVector(save_points)
+            pcd_file = results['lidar_path'].split("/")[-1].split(".")[0] + ".pcd"
+            pcd_file = os.path.join(dir_name, pcd_file)
+            o3d.io.write_point_cloud(pcd_file, pcd)
         return results
 
 
@@ -402,12 +429,12 @@ class CustomPointToMultiViewDepth(BaseTransform):
         img_aug_matrix  = results['img_aug_matrix']
         post_rots = [torch.tensor(single_aug_matrix[:3, :3]).to(torch.float) for single_aug_matrix in img_aug_matrix]
         post_trans = torch.stack([torch.tensor(single_aug_matrix[:3, 3]).to(torch.float) for single_aug_matrix in img_aug_matrix])
-        # import pdb;pdb.set_trace()
+        
         intrins = results['camera_intrinsics']
         depth_map_list = []
         
         for cid in range(len(imgs)):
-            # import pdb;pdb.set_trace()
+            
             lidar2lidarego = torch.tensor(results['lidar2ego']).to(torch.float32)
             lidarego2global = np.eye(4, dtype=np.float32)
             lidarego2global[:3, :3] = Quaternion(results['ego2global_rotation']).rotation_matrix
@@ -422,7 +449,6 @@ class CustomPointToMultiViewDepth(BaseTransform):
             lidar2cam = torch.inverse(camego2global.matmul(cam2camego)).matmul(
                 lidarego2global.matmul(lidar2lidarego))
             lidar2img = cam2img.matmul(lidar2cam)
-
             points_img = points_lidar.tensor[:, :3].matmul(
                 lidar2img[:3, :3].T.to(torch.float)) + lidar2img[:3, 3].to(torch.float).unsqueeze(0)
             points_img = torch.cat(
@@ -433,25 +459,26 @@ class CustomPointToMultiViewDepth(BaseTransform):
             depth_map = self.points2depthmap(points_img, imgs.shape[1],
                                              imgs.shape[2])
             depth_map_list.append(depth_map)
-        depth_map = torch.stack(depth_map_list)
         
+        depth_map = torch.stack(depth_map_list)
         ##################################################################
-        # global i
-        # import cv2
-        # for image_id in range(imgs.shape[0]):
-        #     i+=1
-        #     image = imgs[image_id]
-        #     gt_depth_image = depth_map[image_id].numpy()
-            
-        #     gt_depth_image = np.expand_dims(gt_depth_image,2).repeat(3,2)
-            
-        #     #apply colormap on deoth image(image must be converted to 8-bit per pixel first)
-        #     im_color=cv2.applyColorMap(cv2.convertScaleAbs(gt_depth_image,alpha=15),cv2.COLORMAP_JET)
-        #     #convert to mat png
-        #     image[gt_depth_image>0] = im_color[gt_depth_image>0]
-        #     im=Image.fromarray(np.uint8(image))
-        #     #save image
-        #     im.save('visualize_1/visualize_{}.png'.format(i))
+        if results.get('is_vis_on_test', False):
+            dir_name = "./tmp/CustomPointToMultiViewDepth"
+            os.makedirs(dir_name, exist_ok=True)
+            for image_id in range(imgs.shape[0]):
+                img_name = results['img_filename'][image_id].split("/")[-1]
+                image = imgs[image_id]
+                gt_depth_image = depth_map[image_id].numpy()
+                
+                gt_depth_image = np.expand_dims(gt_depth_image,2).repeat(3,2)
+                
+                #apply colormap on deoth image(image must be converted to 8-bit per pixel first)
+                im_color=cv.applyColorMap(cv.convertScaleAbs(gt_depth_image,alpha=15),cv.COLORMAP_JET)
+                #convert to mat png
+                image[gt_depth_image>0] = im_color[gt_depth_image>0]
+                im=Image.fromarray(np.uint8(image))
+                #save image
+                im.save(os.path.join(dir_name, img_name))
         #################################################################
 
         results['gt_depth'] = depth_map

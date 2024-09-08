@@ -23,7 +23,7 @@ def main():
     args = parse_args()
     parent_dir = osp.join(args.visdir,'..')
     vis_subdir_list = []
-    # import pdb;pdb.set_trace()
+    
     size = (1680,450)
     # fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     # fourcc = cv2.VideoWriter_fourcc(*'MP4V')
@@ -115,12 +115,12 @@ def main():
             
             sample_img = cv2.hconcat([cams_img, resized_map_img, resized_gt_map_img])
             cv2.imwrite(sample_path, sample_img,[cv2.IMWRITE_JPEG_QUALITY, 70])
-            # import pdb;pdb.set_trace()
+            
             resized_img = cv2.resize(sample_img,size)
 
             video.write(resized_img)
         prog_bar.update()
-    # import pdb;pdb.set_trace()
+    
     video.release()
 
     cv2.destroyAllWindows()

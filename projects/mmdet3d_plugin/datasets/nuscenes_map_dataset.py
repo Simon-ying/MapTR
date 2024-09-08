@@ -54,7 +54,7 @@ def add_rotation_noise(extrinsics, std=0.01, mean=0.0):
 
     rotation = torch.from_numpy(extrinsics.astype(np.float32))
     rotation[:3, -1] = 0.0
-    # import pdb;pdb.set_trace()
+    
     rotation = rotation_matrix @ rotation
     extrinsics[:3, :3] = rotation[:3, :3].numpy()
     return extrinsics
@@ -210,14 +210,14 @@ class LiDARInstanceLines(object):
         instances_list = []
         is_poly = False
         # is_line = False
-        # import pdb;pdb.set_trace()
+        
         for fixed_num_pts in fixed_num_sampled_points:
             # [fixed_num, 2]
             is_poly = fixed_num_pts[0].equal(fixed_num_pts[-1])
             fixed_num = fixed_num_pts.shape[0]
             shift_pts_list = []
             if is_poly:
-                # import pdb;pdb.set_trace()
+                
                 for shift_right_i in range(fixed_num):
                     shift_pts_list.append(fixed_num_pts.roll(shift_right_i,0))
             else:
@@ -248,7 +248,7 @@ class LiDARInstanceLines(object):
         instances_list = []
         is_poly = False
         # is_line = False
-        # import pdb;pdb.set_trace()
+        
         for fixed_num_pts in fixed_num_sampled_points:
             # [fixed_num, 2]
             is_poly = fixed_num_pts[0].equal(fixed_num_pts[-1])
@@ -314,7 +314,7 @@ class LiDARInstanceLines(object):
                     shift_instance = LineString(shift_pts)
                     shift_sampled_points = np.array([list(shift_instance.interpolate(distance).coords) for distance in distances]).reshape(-1, 2)
                     shift_pts_list.append(shift_sampled_points)
-                # import pdb;pdb.set_trace()
+                
             else:
                 sampled_points = np.array([list(instance.interpolate(distance).coords) for distance in distances]).reshape(-1, 2)
                 flip_sampled_points = np.flip(sampled_points, axis=0)
@@ -976,7 +976,7 @@ class CustomNuScenesLocalMapDataset(CustomNuScenesDataset):
                                 padding_value=0, cpu_only=False
                   'gt_bboxes_3d': stack=False, cpu_only=True
         '''
-        # import pdb;pdb.set_trace()
+        
         lidar2ego = np.eye(4)
         lidar2ego[:3,:3] = Quaternion(input_dict['lidar2ego_rotation']).rotation_matrix
         lidar2ego[:3, 3] = input_dict['lidar2ego_translation']
@@ -1297,7 +1297,7 @@ class CustomNuScenesLocalMapDataset(CustomNuScenesDataset):
         assert self.map_ann_file is not None
         pred_annos = []
         mapped_class_names = self.MAPCLASSES
-        # import pdb;pdb.set_trace()
+        
         print('Start to convert map detection format...')
         for sample_id, det in enumerate(mmcv.track_iter_progress(results)):
             pred_anno = {}
@@ -1338,7 +1338,7 @@ class CustomNuScenesLocalMapDataset(CustomNuScenesDataset):
 
     def to_gt_vectors(self,
                       gt_dict):
-        # import pdb;pdb.set_trace()
+        
         gt_labels = gt_dict['gt_labels_3d'].data
         gt_instances = gt_dict['gt_bboxes_3d'].data.instance_list
 

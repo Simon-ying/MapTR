@@ -265,7 +265,7 @@ class MapTR(MVXTwoStageDetector):
 
         prev_img_metas = copy.deepcopy(img_metas)
         # prev_bev = self.obtain_history_bev(prev_img, prev_img_metas)
-        # import pdb;pdb.set_trace()
+        
         prev_bev = self.obtain_history_bev(prev_img, prev_img_metas) if len_queue>1 else None
 
         img_metas = [each[len_queue-1] for each in img_metas]
@@ -352,7 +352,7 @@ class MapTR(MVXTwoStageDetector):
             self.pred2result(bboxes, scores, labels, pts)
             for bboxes, scores, labels, pts in bbox_list
         ]
-        # import pdb;pdb.set_trace()
+        
         return outs['bev_embed'], bbox_results
     def simple_test(self, img_metas, img=None, points=None, prev_bev=None, rescale=False, **kwargs):
         """Test function without augmentaiton."""
@@ -414,7 +414,7 @@ class MapTR_fp16(MapTR):
         """
         
         img_feats = self.extract_feat(img=img, img_metas=img_metas)
-        # import pdb;pdb.set_trace()
+        
         losses = dict()
         losses_pts = self.forward_pts_train(img_feats, gt_bboxes_3d,
                                             gt_labels_3d, img_metas,

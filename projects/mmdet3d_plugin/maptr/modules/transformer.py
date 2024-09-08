@@ -221,9 +221,9 @@ class MapTRPerceptionTransformer(BaseModule):
             mlvl_feats,
             prev_bev=None,
             **kwargs):
-        # import ipdb;ipdb.set_trace()
+        
         # assert len(mlvl_feats) == 1, 'Currently we only use last single level feat in LSS'
-        # import ipdb;ipdb.set_trace()
+        
         images = mlvl_feats[self.feat_down_sample_indice]
         img_metas = kwargs['img_metas']
         encoder_outputdict = self.encoder(images,img_metas)

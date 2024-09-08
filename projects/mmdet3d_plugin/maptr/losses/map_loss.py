@@ -54,7 +54,7 @@ def custom_weight_dir_reduce_loss(loss, weight=None, reduction='mean', avg_facto
     else:
         # if reduction is mean, then average the loss by avg_factor
         if reduction == 'mean':
-            # import pdb;pdb.set_trace()
+            
             # loss = loss.permute(1,0,2,3).contiguous()
             loss = loss.sum()
             loss = loss / avg_factor
@@ -87,7 +87,7 @@ def custom_weight_reduce_loss(loss, weight=None, reduction='mean', avg_factor=No
     else:
         # if reduction is mean, then average the loss by avg_factor
         if reduction == 'mean':
-            # import pdb;pdb.set_trace()
+            
             loss = loss.permute(1,0,2,3).contiguous()
             loss = loss.sum((1,2,3))
             loss = loss / avg_factor
@@ -204,7 +204,7 @@ def ordered_pts_smooth_l1_loss(pred, target):
     pred = pred.unsqueeze(1).repeat(1, target.size(1),1,1)
     assert pred.size() == target.size()
     loss =smooth_l1_loss(pred,target, reduction='none')
-    # import pdb;pdb.set_trace()
+    
     return loss
 
 @mmcv.utils.jit(derivate=True, coderize=True)
@@ -254,7 +254,7 @@ def pts_dir_cos_loss(pred, target):
     """
     if target.numel() == 0:
         return pred.sum() * 0
-    # import pdb;pdb.set_trace()
+    
     num_samples, num_dir, num_coords = pred.shape
     loss_func = torch.nn.CosineEmbeddingLoss(reduction='none')
     tgt_param = target.new_ones((num_samples, num_dir))
@@ -300,7 +300,7 @@ class OrderedPtsSmoothL1Loss(nn.Module):
         assert reduction_override in (None, 'none', 'mean', 'sum')
         reduction = (
             reduction_override if reduction_override else self.reduction)
-        # import pdb;pdb.set_trace()
+        
         loss_bbox = self.loss_weight * ordered_pts_smooth_l1_loss(
             pred, target, weight, reduction=reduction, avg_factor=avg_factor)
         return loss_bbox
@@ -343,7 +343,7 @@ class PtsDirCosLoss(nn.Module):
         assert reduction_override in (None, 'none', 'mean', 'sum')
         reduction = (
             reduction_override if reduction_override else self.reduction)
-        # import pdb;pdb.set_trace()
+        
         loss_dir = self.loss_weight * pts_dir_cos_loss(
             pred, target, weight, reduction=reduction, avg_factor=avg_factor)
         return loss_dir
@@ -387,7 +387,7 @@ class PtsL1Loss(nn.Module):
         assert reduction_override in (None, 'none', 'mean', 'sum')
         reduction = (
             reduction_override if reduction_override else self.reduction)
-        # import pdb;pdb.set_trace()
+        
         loss_bbox = self.loss_weight * pts_l1_loss(
             pred, target, weight, reduction=reduction, avg_factor=avg_factor)
         return loss_bbox
@@ -429,7 +429,7 @@ class OrderedPtsL1Loss(nn.Module):
         assert reduction_override in (None, 'none', 'mean', 'sum')
         reduction = (
             reduction_override if reduction_override else self.reduction)
-        # import pdb;pdb.set_trace()
+        
         loss_bbox = self.loss_weight * ordered_pts_l1_loss(
             pred, target, weight, reduction=reduction, avg_factor=avg_factor)
         return loss_bbox
@@ -460,10 +460,10 @@ class OrderedPtsSmoothL1Cost(object):
             torch.Tensor: bbox_cost value with weight
         """
         num_gts, num_orders, num_pts, num_coords = gt_bboxes.shape
-        # import pdb;pdb.set_trace()
+        
         bbox_pred = bbox_pred.view(bbox_pred.size(0),-1).unsqueeze(1).repeat(1,num_gts*num_orders,1)
         gt_bboxes = gt_bboxes.flatten(2).view(num_gts*num_orders,-1).unsqueeze(0).repeat(bbox_pred.size(0),1,1)
-        # import pdb;pdb.set_trace()
+        
         bbox_cost = smooth_l1_loss(bbox_pred, gt_bboxes, reduction='none').sum(-1)
         # bbox_cost = torch.cdist(bbox_pred, gt_bboxes, p=1)
         return bbox_cost * self.weight
@@ -491,7 +491,7 @@ class PtsL1Cost(object):
             torch.Tensor: bbox_cost value with weight
         """
         num_gts, num_pts, num_coords = gt_bboxes.shape
-        # import pdb;pdb.set_trace()
+        
         bbox_pred = bbox_pred.view(bbox_pred.size(0),-1)
         gt_bboxes = gt_bboxes.view(num_gts,-1)
         bbox_cost = torch.cdist(bbox_pred, gt_bboxes, p=1)
@@ -520,7 +520,7 @@ class OrderedPtsL1Cost(object):
             torch.Tensor: bbox_cost value with weight
         """
         num_gts, num_orders, num_pts, num_coords = gt_bboxes.shape
-        # import pdb;pdb.set_trace()
+        
         bbox_pred = bbox_pred.view(bbox_pred.size(0),-1)
         gt_bboxes = gt_bboxes.flatten(2).view(num_gts*num_orders,-1)
         bbox_cost = torch.cdist(bbox_pred, gt_bboxes, p=1)
@@ -548,7 +548,7 @@ class MyChamferDistanceCost:
         #     criterion = mse_loss
         # else:
         #     raise NotImplementedError
-        # import pdb;pdb.set_trace()
+        
         src_expand = src.unsqueeze(1).repeat(1,dst.shape[0],1,1)
         dst_expand = dst.unsqueeze(0).repeat(src.shape[0],1,1,1)
         # src_expand = src.unsqueeze(2).unsqueeze(1).repeat(1,dst.shape[0], 1, dst.shape[1], 1)
@@ -607,11 +607,11 @@ def chamfer_distance(src,
 
     # src_expand = src.unsqueeze(2).repeat(1, 1, dst.shape[1], 1)
     # dst_expand = dst.unsqueeze(1).repeat(1, src.shape[1], 1, 1)
-    # import pdb;pdb.set_trace()
+    
     distance = torch.cdist(src, dst)
     src2dst_distance, indices1 = torch.min(distance, dim=2)  # (B,N)
     dst2src_distance, indices2 = torch.min(distance, dim=1)  # (B,M)
-    # import pdb;pdb.set_trace()
+    
     #TODO this may be wrong for misaligned src_weight, now[N,fixed_num]
     # should be [N], then view
     loss_src = (src2dst_distance * src_weight)

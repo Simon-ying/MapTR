@@ -178,7 +178,7 @@ class MapTRAssigner(BaseAssigner):
         
         normalized_gt_bboxes = normalize_2d_bbox(gt_bboxes, self.pc_range)
         # normalized_gt_bboxes = gt_bboxes
-        # import pdb;pdb.set_trace()
+        
         reg_cost = self.reg_cost(bbox_pred[:, :4], normalized_gt_bboxes[:, :4])
 
         _, num_orders, num_pts_per_gtline, num_coords = gt_pts.shape

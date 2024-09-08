@@ -78,7 +78,7 @@ class SimpleLoss(torch.nn.Module):
         self.loss_weight = loss_weight
 
     def forward(self, ypred, ytgt):
-        # import ipdb;ipdb.set_trace()
+        
         loss = self.loss_fn(ypred, ytgt)
         return loss*self.loss_weight
 
@@ -110,6 +110,6 @@ class MaskFocalLoss(FocalLoss):
                 alpha=self.alpha,
                 reduction=reduction,
                 avg_factor=avg_factor)
-        # import ipdb; ipdb.set_trace()
+        
         loss /= num_classes
         return loss

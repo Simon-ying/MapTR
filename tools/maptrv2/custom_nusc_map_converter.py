@@ -79,7 +79,7 @@ class CNuScenesMapExplorer(NuScenesMapExplorer):
                         
                         # centerline.coords = np.array(centerline.coords).round(3)
                         # if centerline.geom_type != 'LineString':
-                            # import ipdb;ipdb.set_trace()
+                            
                         record_dict = dict(
                             centerline=centerline,
                             token=record['token'],
@@ -324,7 +324,7 @@ def _fill_trainval_infos(nusc,
                 break
         info['sweeps'] = sweeps
         # obtain annotation
-        # import ipdb;ipdb.set_trace()
+        
         info = obtain_vectormap(nusc_maps, map_explorer, info, point_cloud_range)
 
         if sample['scene_token'] in train_scenes:
@@ -335,7 +335,7 @@ def _fill_trainval_infos(nusc,
     return train_nusc_infos, val_nusc_infos
 
 def obtain_vectormap(nusc_maps, map_explorer, info, point_cloud_range):
-    # import ipdb;ipdb.set_trace()
+    
     lidar2ego = np.eye(4)
     lidar2ego[:3,:3] = Quaternion(info['lidar2ego_rotation']).rotation_matrix
     lidar2ego[:3, 3] = info['lidar2ego_translation']
@@ -357,7 +357,7 @@ def obtain_vectormap(nusc_maps, map_explorer, info, point_cloud_range):
     patch_size = (patch_h, patch_w)
     vector_map = VectorizedLocalMap(nusc_maps[location], map_explorer[location],patch_size)
     map_anns = vector_map.gen_vectorized_samples(lidar2global_translation, lidar2global_rotation)
-    # import ipdb;ipdb.set_trace()
+    
     info["annotation"] = map_anns
     return info
 
@@ -399,7 +399,7 @@ class VectorizedLocalMap(object):
         
         map_pose = lidar2global_translation[:2]
         rotation = Quaternion(lidar2global_rotation)
-        # import ipdb;ipdb.set_trace()
+        
         patch_box = (map_pose[0], map_pose[1], self.patch_size[0], self.patch_size[1])
         patch_angle = quaternion_yaw(rotation) / np.pi * 180
         map_dict = {'divider':[],'ped_crossing':[],'boundary':[],'centerline':[]}
@@ -422,7 +422,7 @@ class VectorizedLocalMap(object):
                 polygon_geom = self.get_map_geom(patch_box, patch_angle, self.polygon_classes)
                 poly_bound_list = self.poly_geoms_to_instances(polygon_geom)
                 for instance in poly_bound_list:
-                    # import ipdb;ipdb.set_trace()
+                    
                     map_dict[vec_class].append(np.array(instance.coords))
                     # vectors.append((contour, self.CLASS2LABEL.get('contours', -1)))
             elif vec_class =='centerline':
@@ -432,7 +432,7 @@ class VectorizedLocalMap(object):
                     map_dict[vec_class].append(np.array(instance.coords))
             else:
                 raise ValueError(f'WRONG vec_class: {vec_class}')
-        # import ipdb;ipdb.set_trace()
+        
         return map_dict
     def get_centerline_geom(self, patch_box, patch_angle, layer_names):
         map_geom = {}
@@ -443,7 +443,7 @@ class VectorizedLocalMap(object):
                 patch_box, patch_angle, layer_name, return_token=return_token)
                 if len(layer_centerline_dict.keys()) == 0:
                     continue
-                # import ipdb;ipdb.set_trace()
+                
                 map_geom.update(layer_centerline_dict)
         return map_geom
     def get_map_geom(self, patch_box, patch_angle, layer_names):
@@ -583,7 +583,7 @@ class VectorizedLocalMap(object):
 
     def ped_poly_geoms_to_instances(self, ped_geom):
         # ped = ped_geom[0][1]
-        # import ipdb;ipdb.set_trace()
+        
         ped = ped_geom['ped_crossing']
         union_segments = ops.unary_union(ped)
         max_x = self.patch_size[1] / 2
@@ -621,7 +621,7 @@ class VectorizedLocalMap(object):
     def poly_geoms_to_instances(self, polygon_geom):
         roads = polygon_geom['road_segment']
         lanes = polygon_geom['lane']
-        # import ipdb;ipdb.set_trace()
+        
         union_roads = ops.unary_union(roads)
         union_lanes = ops.unary_union(lanes)
         union_segments = ops.unary_union([union_roads, union_lanes])
@@ -659,13 +659,13 @@ class VectorizedLocalMap(object):
     def centerline_geoms_to_instances(self,geoms_dict):
         centerline_geoms_list,pts_G = self.union_centerline(geoms_dict)
         # vectors_dict = self.centerline_geoms2vec(centerline_geoms_list)
-        # import ipdb;ipdb.set_trace()
+        
         return self._one_type_line_geom_to_instances(centerline_geoms_list)
 
 
     def centerline_geoms2vec(self, centerline_geoms_list):
         vector_dict = {}
-        # import ipdb;ipdb.set_trace()
+        
         # centerline_geoms_list = [line.simplify(0.2, preserve_topology=True) \
         #                         for line in centerline_geoms_list]
         vectors = self._geom_to_vectors(
@@ -674,7 +674,7 @@ class VectorizedLocalMap(object):
         return vector_dict
 
     def union_centerline(self, centerline_geoms):
-        # import ipdb;ipdb.set_trace()
+        
         pts_G = nx.DiGraph()
         junction_pts_list = []
         for key, value in centerline_geoms.items():
@@ -816,18 +816,18 @@ def create_nuscenes_infos(root_path,
     metadata = dict(version=version)
     if test:
         print('test sample: {}'.format(len(train_nusc_infos)))
-        data = dict(infos=train_nusc_infos, metadata=metadata)
+        data = dict(data_list=train_nusc_infos, metainfo=metadata)
         info_path = osp.join(out_path,
                              '{}_map_infos_temporal_test.pkl'.format(info_prefix))
         mmengine.dump(data, info_path)
     else:
         print('train sample: {}, val sample: {}'.format(
             len(train_nusc_infos), len(val_nusc_infos)))
-        data = dict(infos=train_nusc_infos, metadata=metadata)
+        data = dict(data_list=train_nusc_infos, metainfo=metadata)
         info_path = osp.join(out_path,
                              '{}_map_infos_temporal_train.pkl'.format(info_prefix))
         mmengine.dump(data, info_path)
-        data['infos'] = val_nusc_infos
+        data['data_list'] = val_nusc_infos
         info_val_path = osp.join(out_path,
                                  '{}_map_infos_temporal_val.pkl'.format(info_prefix))
         info_val_json_path = osp.join(out_path,

@@ -116,7 +116,7 @@ class LiDARInstanceLines(object):
                 sampled_points = sampled_points.reshape(-1,3)
             else:
                 sampled_points = sampled_points.reshape(-1,2)
-            # import pdb;pdb.set_trace()
+            
             instance_points_list.append(sampled_points)
         instance_points_array = np.array(instance_points_list)
         instance_points_tensor = to_tensor(instance_points_array)
@@ -187,14 +187,14 @@ class LiDARInstanceLines(object):
         instances_list = []
         is_poly = False
         # is_line = False
-        # import pdb;pdb.set_trace()
+        
         for fixed_num_pts in fixed_num_sampled_points:
             # [fixed_num, 2]
             is_poly = fixed_num_pts[0].equal(fixed_num_pts[-1])
             fixed_num = fixed_num_pts.shape[0]
             shift_pts_list = []
             if is_poly:
-                # import pdb;pdb.set_trace()
+                
                 for shift_right_i in range(fixed_num):
                     shift_pts_list.append(fixed_num_pts.roll(shift_right_i,0))
             else:
@@ -225,7 +225,7 @@ class LiDARInstanceLines(object):
         instances_list = []
         is_poly = False
         # is_line = False
-        # import pdb;pdb.set_trace()
+        
         for fixed_num_pts in fixed_num_sampled_points:
             # [fixed_num, 2]
             is_poly = fixed_num_pts[0].equal(fixed_num_pts[-1])
@@ -291,7 +291,7 @@ class LiDARInstanceLines(object):
                     shift_instance = LineString(shift_pts)
                     shift_sampled_points = np.array([list(shift_instance.interpolate(distance).coords) for distance in distances]).reshape(-1, coords_num)
                     shift_pts_list.append(shift_sampled_points)
-                # import pdb;pdb.set_trace()
+                
             else:
                 sampled_points = np.array([list(instance.interpolate(distance).coords) for distance in distances]).reshape(-1, coords_num)
                 flip_sampled_points = np.flip(sampled_points, axis=0)
@@ -358,7 +358,7 @@ class LiDARInstanceLines(object):
                     shift_instance = LineString(shift_pts)
                     shift_sampled_points = np.array([list(shift_instance.interpolate(distance).coords) for distance in distances]).reshape(-1, coords_num)
                     shift_pts_list.append(shift_sampled_points)
-                # import pdb;pdb.set_trace()
+                
             else:
                 sampled_points = np.array([list(instance.interpolate(distance).coords) for distance in distances]).reshape(-1, coords_num)
                 flip_sampled_points = np.flip(sampled_points, axis=0)
@@ -367,7 +367,7 @@ class LiDARInstanceLines(object):
             
             multi_shifts_pts = np.stack(shift_pts_list,axis=0)
             shifts_num,_,_ = multi_shifts_pts.shape
-            # import pdb;pdb.set_trace()
+            
             if shifts_num > 2*final_shift_num:
                 index = np.random.choice(shift_num, final_shift_num, replace=False)
                 flip0_shifts_pts = multi_shifts_pts[index]
@@ -399,7 +399,7 @@ class LiDARInstanceLines(object):
         instances_list = []
         is_poly = False
         # is_line = False
-        # import pdb;pdb.set_trace()
+        
         for fixed_num_pts in fixed_num_sampled_points:
             # [fixed_num, 2]
             is_poly = fixed_num_pts[0].equal(fixed_num_pts[-1])
@@ -448,14 +448,14 @@ class LiDARInstanceLines(object):
         instances_list = []
         is_poly = False
         # is_line = False
-        # import pdb;pdb.set_trace()
+        
         for fixed_num_pts in fixed_num_sampled_points:
             # [fixed_num, 2]
             is_poly = fixed_num_pts[0].equal(fixed_num_pts[-1])
             fixed_num = fixed_num_pts.shape[0]
             shift_pts_list = []
             if is_poly:
-                # import pdb;pdb.set_trace()
+                
                 for shift_right_i in range(fixed_num):
                     shift_pts_list.append(fixed_num_pts.roll(shift_right_i,0))
             else:
@@ -550,7 +550,7 @@ class VectorizedAV2LocalMap(object):
 
         patch_box = (map_pose[0], map_pose[1], self.patch_size[0], self.patch_size[1])
         patch_angle = quaternion_yaw(rotation) / np.pi * 180
-        # import pdb;pdb.set_trace()
+        
         vectors = []
         city_SE2_ego = SE3(lidar2global_rotation, lidar2global_translation)
         ego_SE3_city = city_SE2_ego.inverse()
@@ -583,7 +583,7 @@ class VectorizedAV2LocalMap(object):
             if type != -1:
                 gt_instance.append(instance)
                 gt_labels.append(type)
-        # import pdb;pdb.set_trace()
+        
         gt_instance = LiDARInstanceLines(gt_instance,self.sample_dist,
                         self.num_samples, self.padding, self.fixed_num,self.padding_value, patch_size=self.patch_size)
 
@@ -592,10 +592,10 @@ class VectorizedAV2LocalMap(object):
             gt_vecs_label=gt_labels,
 
         )
-        # import pdb;pdb.set_trace()
+        
         return anns_results
     def proc_polygon(self, polygon, ego_SE3_city):
-        # import pdb;pdb.set_trace()
+        
         interiors = []
         exterior_cityframe = np.array(list(polygon.exterior.coords))
         exterior_egoframe = ego_SE3_city.transform_point_cloud(exterior_cityframe)
@@ -612,25 +612,24 @@ class VectorizedAV2LocalMap(object):
         patch_x = patch_box[0]
         patch_y = patch_box[1]
         patch = NuScenesMapExplorer.get_patch_coord(patch_box, patch_angle)
-        # import pdb;pdb.set_trace()
+        
         polygon_list = []
         for da in avm:
             exterior_coords = da
-            # import pdb;pdb.set_trace()
+            
             interiors = []
-            # import pdb;pdb.set_trace()
+            
             is_polygon =  np.array_equal(exterior_coords[0],exterior_coords[-1])
             if is_polygon:
                 polygon = Polygon(exterior_coords, interiors)
             else:    
-                import pdb;pdb.set_trace()
                 polygon = LineString(exterior_coords)
                 raise ValueError(f'WRONG type: line in boundary')
             if is_polygon:
                 if polygon.is_valid:
                     new_polygon = polygon.intersection(patch)
                     if not new_polygon.is_empty:
-                        # import pdb;pdb.set_trace()
+                        
                         if new_polygon.geom_type is 'Polygon':
                             if not new_polygon.is_valid:
                                 continue
@@ -666,7 +665,7 @@ class VectorizedAV2LocalMap(object):
         patch_x = patch_box[0]
         patch_y = patch_box[1]
         patch = NuScenesMapExplorer.get_patch_coord(patch_box, patch_angle)
-        # import pdb;pdb.set_trace()
+        
         polygon_list = []
         for pc in avm:
             exterior_coords = pc
@@ -705,7 +704,7 @@ class VectorizedAV2LocalMap(object):
         return map_ped_geom
 
     def proc_line(self, line,ego_SE3_city):
-        # import pdb;pdb.set_trace()
+        
         new_line_pts_cityframe = np.array(list(line.coords))
         new_line_pts_egoframe = ego_SE3_city.transform_point_cloud(new_line_pts_cityframe)
         line = LineString(new_line_pts_egoframe[:,:2]) #TODO
@@ -723,7 +722,7 @@ class VectorizedAV2LocalMap(object):
                 continue
             new_line = line.intersection(patch)
             if not new_line.is_empty:
-                # import pdb;pdb.set_trace()
+                
                 if new_line.geom_type == 'MultiLineString':
                     for single_line in new_line.geoms:
                         if single_line.is_empty:
@@ -798,7 +797,7 @@ class VectorizedAV2LocalMap(object):
         # union_roads = ops.unary_union(roads)
         # union_lanes = ops.unary_union(lanes)
         # union_segments = ops.unary_union([union_roads, union_lanes])
-        # import pdb;pdb.set_trace()
+        
         bounds = polygon_geom[0][1]
 
         union_segments = ops.unary_union(bounds)
@@ -840,12 +839,12 @@ class VectorizedAV2LocalMap(object):
         if union_lines.geom_type == 'LineString':
             return self._one_type_line_geom_to_instances([union_lines])
         before_num = len(union_lines.geoms)
-        # import pdb;pdb.set_trace()
+        
         merged_lines = ops.linemerge(union_lines)
         if merged_lines.geom_type == 'LineString':
             return self._one_type_line_geom_to_instances([merged_lines])
         after_num = len(merged_lines.geoms)
-        # import pdb;pdb.set_trace()
+        
         while after_num != before_num:
             before_num = len(merged_lines.geoms)
             merged_lines = ops.unary_union(merged_lines)
@@ -944,9 +943,9 @@ class CustomAV2LocalMapDataset(CustomNuScenesDataset):
         Returns:
             list[dict]: List of annotations sorted by timestamps.
         """
-        # import pdb;pdb.set_trace()
+        
         data = mmcv.load(ann_file)
-        # import pdb;pdb.set_trace()
+        
         data_infos = list(sorted(data['samples'], key=lambda e: e['timestamp']))
         data_infos = data_infos[::self.load_interval]
         # data_infos = [ data_info.update(dict(token= str(data_info['timestamp']+data_info['log_id'])))  for data_info in data_infos]
@@ -991,7 +990,7 @@ class CustomAV2LocalMapDataset(CustomNuScenesDataset):
                                 padding_value=0, cpu_only=False
                   'gt_bboxes_3d': stack=False, cpu_only=True
         '''
-        # import pdb;pdb.set_trace()
+        
         location = input_dict['log_id']
         e2g_translation = input_dict['e2g_translation']
         e2g_rotation = input_dict['e2g_rotation']
@@ -1015,12 +1014,12 @@ class CustomAV2LocalMapDataset(CustomNuScenesDataset):
                 # empty tensor, will be passed in train, 
                 # but we preserve it for test
                 
-                # import pdb;pdb.set_trace()
+                
                 gt_vecs_pts_loc = gt_vecs_pts_loc
-        # import ipdb;ipdb.set_trace()
+        
         example['gt_labels_3d'] = DC(gt_vecs_label, cpu_only=False)
         example['gt_bboxes_3d'] = DC(gt_vecs_pts_loc, cpu_only=True)
-        # import pdb;pdb.set_trace()
+        
         # if self.is_vis_on_test:
         #     lidar2global_translation = to_tensor(lidar2global_translation)
         #     example['lidar2global_translation'] = DC(lidar2global_translation, cpu_only=True)
@@ -1051,7 +1050,7 @@ class CustomAV2LocalMapDataset(CustomNuScenesDataset):
         scene_token = input_dict['log_id']
         self.pre_pipeline(input_dict)
         example = self.pipeline(input_dict)
-        # import pdb;pdb.set_trace()
+        
         example = self.vectormap_pipeline(example,input_dict)
         if self.filter_empty_gt and \
                 (example is None or ~(example['gt_labels_3d']._data != -1).any()):
@@ -1169,7 +1168,7 @@ class CustomAV2LocalMapDataset(CustomNuScenesDataset):
         can_bus[-2] = patch_angle / 180 * np.pi
         can_bus[-1] = patch_angle
         input_dict['can_bus'] = can_bus
-        # import pdb;pdb.set_trace()
+        
         return input_dict
 
     def prepare_test_data(self, index):
@@ -1204,7 +1203,7 @@ class CustomAV2LocalMapDataset(CustomNuScenesDataset):
             return data
     def _format_gt(self):
         gt_annos = []
-        # import pdb;pdb.set_trace()
+        
         print('Start to convert gt map format...')
         assert self.map_ann_file is not None
         if (not os.path.exists(self.map_ann_file)) :
@@ -1220,7 +1219,7 @@ class CustomAV2LocalMapDataset(CustomNuScenesDataset):
                 gt_sample_dict = self.vectormap_pipeline(gt_sample_dict, self.data_infos[sample_id])
                 gt_labels = gt_sample_dict['gt_labels_3d'].data.numpy()
                 gt_vecs = gt_sample_dict['gt_bboxes_3d'].data.instance_list
-                # import pdb;pdb.set_trace()
+                
                 gt_vec_list = []
                 for i, (gt_label, gt_vec) in enumerate(zip(gt_labels, gt_vecs)):
                     name = mapped_class_names[gt_label]
@@ -1258,7 +1257,7 @@ class CustomAV2LocalMapDataset(CustomNuScenesDataset):
         assert self.map_ann_file is not None
         pred_annos = []
         mapped_class_names = self.MAPCLASSES
-        # import pdb;pdb.set_trace()
+        
         print('Start to convert map detection format...')
         for sample_id, det in enumerate(mmcv.track_iter_progress(results)):
             pred_anno = {}
@@ -1303,7 +1302,7 @@ class CustomAV2LocalMapDataset(CustomNuScenesDataset):
 
     def to_gt_vectors(self,
                       gt_dict):
-        # import pdb;pdb.set_trace()
+        
         gt_labels = gt_dict['gt_labels_3d'].data
         gt_instances = gt_dict['gt_bboxes_3d'].data.instance_list
 
@@ -1345,7 +1344,7 @@ class CustomAV2LocalMapDataset(CustomNuScenesDataset):
         from projects.mmdet3d_plugin.datasets.map_utils.mean_ap import eval_map
         from projects.mmdet3d_plugin.datasets.map_utils.mean_ap import format_res_gt_by_classes
         result_path = osp.abspath(result_path)
-        # import pdb;pdb.set_trace()
+        
         detail = dict()
         
         print('Formating results & gts by classes')
@@ -1466,7 +1465,7 @@ def output_to_vecs(detection):
     pts = detection['pts_3d'].numpy()
 
     vec_list = []
-    # import pdb;pdb.set_trace()
+    
     for i in range(box3d.shape[0]):
         vec = dict(
             bbox = box3d[i], # xyxy

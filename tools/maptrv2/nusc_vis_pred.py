@@ -158,7 +158,7 @@ def main():
     logger.info('Done build test data set')
 
     # build the model and load checkpoint
-    # import pdb;pdb.set_trace()
+    
     cfg.model.train_cfg = None
     # cfg.model.pts_bbox_head.bbox_coder.max_num=15 # TODO this is a hack
     model = MODELS.build(cfg.model, test_cfg=cfg.get('test_cfg'))
@@ -201,10 +201,10 @@ def main():
     dataset = data_loader.dataset
     have_mask = False
     prog_bar = mmengine.ProgressBar(len(dataset))
-    # import pdb;pdb.set_trace()
+    
     for i, data in enumerate(data_loader):
         if ~(data['gt_labels_3d'].data[0][0] != -1).any():
-            # import pdb;pdb.set_trace()
+            
             logger.error(f'\n empty gt for index {i}, continue')
             # prog_bar.update()  
             continue
@@ -218,7 +218,7 @@ def main():
         pts_filename = img_metas[0]['pts_filename']
         pts_filename = osp.basename(pts_filename)
         pts_filename = pts_filename.replace('__LIDAR_TOP__', '_').split('.')[0]
-        # import pdb;pdb.set_trace()
+        
         # if pts_filename not in CANDIDATE:
         #     continue
 
@@ -274,7 +274,7 @@ def main():
                     xy = (gt_bbox_3d[0],gt_bbox_3d[1])
                     width = gt_bbox_3d[2] - gt_bbox_3d[0]
                     height = gt_bbox_3d[3] - gt_bbox_3d[1]
-                    # import pdb;pdb.set_trace()
+                    
                     plt.gca().add_patch(Rectangle(xy,width,height,linewidth=0.4,edgecolor=colors_plt[gt_label_3d],facecolor='none'))
                     # plt.Rectangle(xy, width, height,color=colors_plt[gt_label_3d])
                 # continue
@@ -286,7 +286,7 @@ def main():
                 # gt_bboxes_3d[0].fixed_num=30 #TODO, this is a hack
                 gt_lines_fixed_num_pts = gt_bboxes_3d[0].fixed_num_sampled_points
                 for gt_bbox_3d, gt_label_3d in zip(gt_lines_fixed_num_pts, gt_labels_3d[0]):
-                    # import pdb;pdb.set_trace() 
+                     
                     pts = gt_bbox_3d.numpy()
                     x = np.array([pt[0] for pt in pts])
                     y = np.array([pt[1] for pt in pts])
@@ -308,7 +308,7 @@ def main():
                 plt.ylim(pc_range[1], pc_range[4])
                 plt.axis('off')
                 gt_lines_instance = gt_bboxes_3d[0].instance_list
-                # import pdb;pdb.set_trace()
+                
                 for gt_line_instance, gt_label_3d in zip(gt_lines_instance, gt_labels_3d[0]):
                     pts = np.array(list(gt_line_instance.coords))
                     x = np.array([pt[0] for pt in pts])
@@ -330,14 +330,14 @@ def main():
                 raise ValueError(f'WRONG visformat for GT: {vis_format}')
 
 
-        # import pdb;pdb.set_trace()
+        
         plt.figure(figsize=(2, 4))
         plt.xlim(pc_range[0], pc_range[3])
         plt.ylim(pc_range[1], pc_range[4])
         plt.axis('off')
 
         # visualize pred
-        # import pdb;pdb.set_trace()
+        
         result_dic = result[0]['pts_bbox']
         boxes_3d = result_dic['boxes_3d'] # bbox: xmin, ymin, xmax, ymax
         scores_3d = result_dic['scores_3d']

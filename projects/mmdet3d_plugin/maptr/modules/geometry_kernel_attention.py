@@ -470,7 +470,7 @@ class GeometryKernelAttention(BaseModule):
 
         #  sampling_locations.shape: bs, num_query, num_heads, num_levels, num_all_points, 2
         #  attention_weights.shape: bs, num_query, num_heads, num_levels, num_all_points
-        # import pdb;pdb.set_trace()
+        
         # output = self.forward_kernel_multihead_attention(
         #     value, spatial_shapes, sampling_locations, attention_weights)
         # torch.cuda.synchronize()

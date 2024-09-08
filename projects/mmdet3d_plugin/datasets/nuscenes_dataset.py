@@ -232,7 +232,7 @@ class CustomNuScenesDataset(NuScenesDataset):
             'gt_velocity': 'velocities',
         }
         # empty gt
-        if len(info["gt_boxes"]) == 0:
+        if len(info[list(info.keys())[0]]) == 0:
             return None
         else:
             ann_info = dict()
@@ -260,7 +260,6 @@ class CustomNuScenesDataset(NuScenesDataset):
                 if label != -1:
                     self.num_ins_per_cat[label] += 1
             ann_info = self._filter_with_mask(ann_info)
-            new_ann_info = dict()
             if self.with_velocity:
                 ann_info['gt_bboxes_3d'] = np.hstack(
                     (ann_info["gt_bboxes_3d"], 

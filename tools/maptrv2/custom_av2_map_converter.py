@@ -90,7 +90,7 @@ def create_av2_infos_mp(root_path,
     
     loader = AV2SensorDataLoader(Path(root_path), Path(root_path))
     log_ids = list(loader.get_log_ids())
-    # import pdb;pdb.set_trace()
+    
     for l in FAIL_LOGS:
         if l in log_ids:
             log_ids.remove(l)
@@ -423,7 +423,7 @@ def generate_nearby_dividers(avm, patch_box, patch_angle):
     return local_dividers
 
 def proc_polygon(polygon, ego_SE3_city):
-    # import pdb;pdb.set_trace()
+    
     interiors = []
     exterior_cityframe = np.array(list(polygon.exterior.coords))
     exterior_egoframe = ego_SE3_city.transform_point_cloud(exterior_cityframe)
@@ -435,7 +435,7 @@ def proc_polygon(polygon, ego_SE3_city):
     new_polygon = Polygon(exterior_egoframe[:,:3], interiors)
     return new_polygon
 def proc_line(line,ego_SE3_city):
-    # import pdb;pdb.set_trace()
+    
     new_line_pts_cityframe = np.array(list(line.coords))
     new_line_pts_egoframe = ego_SE3_city.transform_point_cloud(new_line_pts_cityframe)
     line = LineString(new_line_pts_egoframe[:,:3]) #TODO

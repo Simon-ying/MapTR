@@ -280,7 +280,7 @@ def main():
     logger.info('Done build test data set')
 
     # build the model and load checkpoint
-    # import pdb;pdb.set_trace()
+    
     cfg.model.train_cfg = None
     # cfg.model.pts_bbox_head.bbox_coder.max_num=15 # TODO this is a hack
     model = build_model(cfg.model, test_cfg=cfg.get('test_cfg'))
@@ -327,11 +327,11 @@ def main():
     have_mask = False
     # prog_bar = mmcv.ProgressBar(len(CANDIDATE))
     prog_bar = mmcv.ProgressBar(len(dataset))
-    # import pdb;pdb.set_trace()
+    
     final_dict = {}
     for i, data in enumerate(data_loader):
         if ~(data['gt_labels_3d'].data[0][0] != -1).any():
-            # import pdb;pdb.set_trace()
+            
             logger.error(f'\n empty gt for index {i}, continue')
             # prog_bar.update()  
             continue
@@ -345,7 +345,7 @@ def main():
         pts_filename = img_metas[0]['pts_filename']
         pts_filename = osp.basename(pts_filename)
         pts_filename = pts_filename.split('.')[0]
-        # import pdb;pdb.set_trace()
+        
         # if pts_filename not in CANDIDATE:
         #     continue
         sample_dict = {}
@@ -357,7 +357,7 @@ def main():
         filename_list = img_metas[0]['filename']
         img_path_dict = {}
         # save cam img for sample
-        # import ipdb;ipdb.set_trace() 
+         
         for filepath, lidar2img, img_aug in zip(filename_list,img_metas[0]['lidar2img'],img_metas[0]['img_aug_matrix']):
             inv_aug = np.linalg.inv(img_aug)
             lidar2orimg = np.dot(inv_aug, lidar2img)
@@ -367,9 +367,9 @@ def main():
                 lidar2img = lidar2orimg)
         sample_dict['imgs_path'] = img_path_dict
         gt_dict = {'divider':[],'ped_crossing':[],'boundary':[],'centerline':[]}
-        # import ipdb;ipdb.set_trace() 
+         
         gt_lines_instance = gt_bboxes_3d[0].instance_list
-        # import pdb;pdb.set_trace()
+        
         for gt_line_instance, gt_label_3d in zip(gt_lines_instance, gt_labels_3d[0]):
             if gt_label_3d == 0:
                 gt_dict['divider'].append(np.array(list(gt_line_instance.coords)))

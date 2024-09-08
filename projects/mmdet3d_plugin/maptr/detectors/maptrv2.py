@@ -248,7 +248,7 @@ class MapTRv2(MVXTwoStageDetector):
             points = batch_inputs_dict['points']
             lidar_feat = self.extract_lidar_feat(points)
         
-        img = batch_inputs_dict.get('imgs', None)
+        img = batch_inputs_dict.get('img', None)
         len_queue = img.size(1)
         prev_img = img[:, :-1, ...]
         img = img[:, -1, ...]
@@ -273,7 +273,7 @@ class MapTRv2(MVXTwoStageDetector):
     
     def predict(self, batch_inputs_dict,
                 batch_data_samples,  **kwargs):
-        img = batch_inputs_dict.get('imgs', None)
+        img = batch_inputs_dict.get('img', None)
         points = batch_inputs_dict.get('points', None)
         assert img.size(0) == 1, "only support batch size = 0 now."
         len_queue = img.size(1)

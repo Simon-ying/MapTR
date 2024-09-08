@@ -140,6 +140,7 @@ class CustomPack3DDetInputs(BaseTransform):
             - 'data_samples' (:obj:`Det3DDataSample`): The annotation info
               of the sample.
         """
+        import pdb;pdb.set_trace()
         # Format 3D data
         if 'points' in results:
             if isinstance(results['points'], BasePoints):
@@ -150,6 +151,7 @@ class CustomPack3DDetInputs(BaseTransform):
                 # process multiple imgs in single frame
                 imgs = np.stack(results['img'], axis=0)
                 if imgs.flags.c_contiguous:
+                    # (num_cam, C, H, W)
                     imgs = to_tensor(imgs).permute(0, 3, 1, 2).contiguous()
                 else:
                     imgs = to_tensor(
@@ -168,7 +170,9 @@ class CustomPack3DDetInputs(BaseTransform):
                 else:
                     img = to_tensor(
                         np.ascontiguousarray(img.transpose(2, 0, 1)))
+                # (C, H, W)
                 results['img'] = img
+
 
         for key in [
                 'proposals', 'gt_bboxes', 'gt_bboxes_ignore', 'gt_labels',

@@ -51,11 +51,11 @@ data_root = 'data/nuscenes/'
 backend_args = None
 
 train_pipeline = [
-    dict(type='mmdet3d.LoadMultiViewImageFromFiles', to_float32=True),
+    dict(type='mmdet3d.CustomLoadMultiViewImageFromFiles', to_float32=True), # load multiview image, pad, save in ['imgs']
     dict(type='mmdet3d.RandomScaleImageMultiViewImage', scales=[0.5]),
     dict(type='mmdet3d.PhotoMetricDistortionMultiViewImage'),
     dict(
-        type='mmdet3d.LoadPointsFromFile',
+        type='mmdet3d.CustomLoadPointsFromFile',
         coord_type='LIDAR',
         load_dim=5,
         use_dim=5,
@@ -95,7 +95,8 @@ dataset = CustomNuScenesOfflineLocalMapDataset(
     fixed_ptsnum_per_line=fixed_ptsnum_per_gt_line,
     eval_use_same_gt_sample_num_flag=eval_use_same_gt_sample_num_flag,
     padding_value=-10000,
-    queue_length=queue_length
-)
+    queue_length=queue_length,
+    is_vis_on_test=True
+) 
 
-item = dataset(0)
+item = dataset[0]

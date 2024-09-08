@@ -5,7 +5,7 @@ from mmdet3d.registry import TRANSFORMS
 from mmdet.datasets.transforms import (PhotoMetricDistortion, RandomCrop,
                                        RandomFlip)
 from mmcv.transforms import BaseTransform, Compose, RandomResize, Resize
-
+import os
 @TRANSFORMS.register_module()
 class PhotoMetricDistortionMultiViewImage(PhotoMetricDistortion):
     """Apply photometric distortion to image sequentially, every transformation
@@ -48,9 +48,24 @@ class PhotoMetricDistortionMultiViewImage(PhotoMetricDistortion):
         Returns:
             dict: Result dict with images distorted.
         """
-        assert 'img' in results, '`img` is not found in results'
+        assert 'img' in results, '`imgs` is not found in results'
         img = results['img']
+        if isinstance(img, list):
+            for i in range(len(img)):
+                img[i] = self.single_transform(img[i], results)
+        else:
+            img = self.single_transform(img, results)
+        results['img'] = img
+        if results.get('is_vis_on_test', False):
+            dir_name = "./tmp/PhotoMetricDistortionMultiViewImage"
+            os.makedirs(dir_name, exist_ok=True)
+            for i in range(len(results['img'])):
+                img_name = results['img_filename'][i].split("/")[-1]
+                mmcv.imwrite(results['img'][i], os.path.join(dir_name, img_name))
+        return results
+    def single_transform(self, img, results):
         img = img.astype(np.float32)
+
         if 'photometric_param' not in results:
             photometric_param = self._random_flags()
             results['photometric_param'] = photometric_param
@@ -95,9 +110,7 @@ class PhotoMetricDistortionMultiViewImage(PhotoMetricDistortion):
         # randomly swap channels
         if swap_flag:
             img = img[..., swap_value]
-
-        results['img'] = img
-        return results
+        return img
 
 
 @TRANSFORMS.register_module()
@@ -121,20 +134,26 @@ class RandomScaleImageMultiViewImage(BaseTransform):
         rand_ind = np.random.permutation(range(len(self.scales)))[0]
         rand_scale = self.scales[rand_ind]
 
-        y_size = [int(img.shape[0] * rand_scale) for img in results['imgs']]
-        x_size = [int(img.shape[1] * rand_scale) for img in results['imgs']]
+        y_size = [int(img.shape[0] * rand_scale) for img in results['img']]
+        x_size = [int(img.shape[1] * rand_scale) for img in results['img']]
         scale_factor = np.eye(4)
         scale_factor[0, 0] *= rand_scale
         scale_factor[1, 1] *= rand_scale
-        results['imgs'] = [mmcv.imresize(img, (x_size[idx], y_size[idx]), return_scale=False) for idx, img in
-                          enumerate(results['imgs'])]
+        results['img'] = [mmcv.imresize(img, (x_size[idx], y_size[idx]), return_scale=False) for idx, img in
+                          enumerate(results['img'])]
         lidar2img = [scale_factor @ l2i for l2i in results['lidar2img']]
         img_aug_matrix = [scale_factor for _ in results['lidar2img']]
         results['lidar2img'] = lidar2img
         results['img_aug_matrix'] = img_aug_matrix
-        results['img_shape'] = [img.shape for img in results['imgs']]
-        results['ori_shape'] = [img.shape for img in results['imgs']]
+        results['img_shape'] = [img.shape for img in results['img']]
+        results['ori_shape'] = [img.shape for img in results['img']]
 
+        if results.get('is_vis_on_test', False):
+            dir_name = "./tmp/RandomScaleImageMultiViewImage"
+            os.makedirs(dir_name, exist_ok=True)
+            for i in range(len(results['img'])):
+                img_name = results['img_filename'][i].split("/")[-1]
+                mmcv.imwrite(results['img'][i], os.path.join(dir_name, img_name))
         return results
 
 
