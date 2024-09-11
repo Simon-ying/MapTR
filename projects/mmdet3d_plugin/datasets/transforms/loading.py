@@ -77,11 +77,7 @@ class CustomLoadMultiViewImageFromFiles(BaseTransform):
         # Set initial values for default meta_keys
         results['pad_shape'] = img.shape
         results['scale_factor'] = 1.0
-        num_channels = 1 if len(img.shape) < 3 else img.shape[2]
-        results['img_norm_cfg'] = dict(
-            mean=np.zeros(num_channels, dtype=np.float32),
-            std=np.ones(num_channels, dtype=np.float32),
-            to_rgb=False)
+        import pdb;pdb.set_trace()
         if results.get('is_vis_on_test', False):
             dir_name = "./tmp/CustomLoadMultiViewImageFromFiles"
             os.makedirs(dir_name, exist_ok=True)
@@ -387,7 +383,7 @@ class CustomLoadPointsFromFile(BaseTransform):
             dir_name = "./tmp/CustomLoadPointsFromFile"
             os.makedirs(dir_name, exist_ok=True)
             pcd = o3d.geometry.PointCloud()
-            save_points = np.array(points)[:, :3]
+            save_points = points.detach().cpu().numpy()[:, :3]
             pcd.points = o3d.utility.Vector3dVector(save_points)
             pcd_file = results['lidar_path'].split("/")[-1].split(".")[0] + ".pcd"
             pcd_file = os.path.join(dir_name, pcd_file)
@@ -430,7 +426,7 @@ class CustomPointToMultiViewDepth(BaseTransform):
         post_rots = [torch.tensor(single_aug_matrix[:3, :3]).to(torch.float) for single_aug_matrix in img_aug_matrix]
         post_trans = torch.stack([torch.tensor(single_aug_matrix[:3, 3]).to(torch.float) for single_aug_matrix in img_aug_matrix])
         
-        intrins = results['camera_intrinsics']
+        intrins = results['cam_intrinsic']
         depth_map_list = []
         
         for cid in range(len(imgs)):

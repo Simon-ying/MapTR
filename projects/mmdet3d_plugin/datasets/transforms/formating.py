@@ -11,7 +11,7 @@ from numpy import dtype
 from mmdet3d.registry import TRANSFORMS
 from mmdet3d.structures import BaseInstance3DBoxes, Det3DDataSample, PointData
 from mmdet3d.structures.points import BasePoints
-
+from projects.mmdet3d_plugin.models.data_preprocessors.utils import multiview_img_stack_batch
 
 def to_tensor(
     data: Union[torch.Tensor, np.ndarray, Sequence, int,
@@ -64,22 +64,12 @@ class CustomPack3DDetInputs(BaseTransform):
     def __init__(
         self,
         keys: tuple,
-        meta_keys: tuple = ('img_path', 'ori_shape', 'img_shape', 'lidar2img',
-                            'depth2img', 'cam2img', 'pad_shape',
-                            'scale_factor', 'flip', 'pcd_horizontal_flip',
-                            'pcd_vertical_flip', 'box_mode_3d', 'box_type_3d',
-                            'img_norm_cfg', 'num_pts_feats', 'pcd_trans',
-                            'sample_idx', 'pcd_scale_factor', 'pcd_rotation',
-                            'pcd_rotation_angle', 'lidar_path',
-                            'transformation_3d_flow', 'trans_mat',
-                            'affine_aug', 'sweep_img_metas', 'ori_cam2img',
-                            'cam2global', 'crop_offset', 'img_crop_offset',
-                            'resize_img_shape', 'lidar2cam', 'ori_lidar2img',
-                            'num_ref_frames', 'num_views', 'ego2global',
-                            'axis_align_matrix', 'scene_token', 'prev_bev_exists', 'can_bus')
+        meta_keys: tuple = ('ann_info', 'cam_intrinsic', '', 'lidar2img'),
+        pad_size_divisor = 1
     ) -> None:
         self.keys = keys
         self.meta_keys = meta_keys
+        self.pad_size_divisor = pad_size_divisor
 
     def _remove_prefix(self, key: str) -> str:
         if key.startswith('gt_'):
@@ -140,7 +130,6 @@ class CustomPack3DDetInputs(BaseTransform):
             - 'data_samples' (:obj:`Det3DDataSample`): The annotation info
               of the sample.
         """
-        import pdb;pdb.set_trace()
         # Format 3D data
         if 'points' in results:
             if isinstance(results['points'], BasePoints):
@@ -149,14 +138,14 @@ class CustomPack3DDetInputs(BaseTransform):
         if 'img' in results:
             if isinstance(results['img'], list):
                 # process multiple imgs in single frame
-                imgs = np.stack(results['img'], axis=0)
-                if imgs.flags.c_contiguous:
+                img = np.stack(results['img'], axis=0)
+                if img.flags.c_contiguous:
                     # (num_cam, C, H, W)
-                    imgs = to_tensor(imgs).permute(0, 3, 1, 2).contiguous()
+                    img = to_tensor(img).permute(0, 3, 1, 2).contiguous()
                 else:
-                    imgs = to_tensor(
-                        np.ascontiguousarray(imgs.transpose(0, 3, 1, 2)))
-                results['img'] = imgs
+                    img = to_tensor(
+                        np.ascontiguousarray(img.transpose(0, 3, 1, 2)))
+                results['img'] = img
             else:
                 img = results['img']
                 if len(img.shape) < 3:
@@ -173,12 +162,8 @@ class CustomPack3DDetInputs(BaseTransform):
                 # (C, H, W)
                 results['img'] = img
 
-
-        for key in [
-                'proposals', 'gt_bboxes', 'gt_bboxes_ignore', 'gt_labels',
-                'gt_bboxes_labels', 'attr_labels', 'pts_instance_mask',
-                'pts_semantic_mask', 'centers_2d', 'depths', 'gt_labels_3d'
-        ]:
+        # TODO: transform corresponding key to tensor
+        for key in []:
             if key not in results:
                 continue
             if isinstance(results[key], list):
@@ -200,7 +185,17 @@ class CustomPack3DDetInputs(BaseTransform):
         gt_instances = InstanceData()
         gt_pts_seg = PointData()
 
+        import pdb;pdb.set_trace()
+        # create metainfo
         data_metas = {}
+        pad_h = int(
+                    np.ceil(results['img'].shape[-2] /
+                            self.pad_size_divisor)) * self.pad_size_divisor
+        pad_w = int(
+            np.ceil(results['img'].shape[-1] /
+                    self.pad_size_divisor)) * self.pad_size_divisor
+        data_metas["pad_shape"] = [(pad_h, pad_w) for _ in range(results['img'].shape[0])]
+
         for key in self.meta_keys:
             if key in results:
                 data_metas[key] = results[key]

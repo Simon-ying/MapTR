@@ -65,7 +65,8 @@ train_pipeline = [
         type='mmdet3d.CustomPack3DDetInputs',
         keys=[
             'img', 'depths', 'gt_labels_3d'
-        ])
+        ],
+        pad_size_divisor=32)
 ]
 
 ''' Create dataset

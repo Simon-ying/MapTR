@@ -36,7 +36,7 @@ def multiview_img_stack_batch(tensor_list: List[Tensor],
     assert len({tensor.ndim for tensor in tensor_list}) == 1, \
         'Expected the dimensions of all tensors must be the same, ' \
         f'but got {[tensor.ndim for tensor in tensor_list]}'
-
+    
     dim = tensor_list[0].dim()
     num_img = len(tensor_list)
     all_sizes: torch.Tensor = torch.Tensor(

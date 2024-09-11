@@ -561,6 +561,7 @@ class VectorizedLocalMap(object):
             instance_list = map_annotation[vec_class]
             for instance in instance_list:
                 vectors.append((LineString(np.array(instance)), self.CLASS2LABEL.get(vec_class, -1))) 
+        # import pdb;pdb.set_trace()
         filtered_vectors = []
         gt_pts_loc_3d = []
         gt_pts_num_3d = []
@@ -574,8 +575,8 @@ class VectorizedLocalMap(object):
                     gt_semantic_mask = None
                 
                 if self.aux_seg['pv_seg']:
-                    num_cam  = len(example['img_metas'].data['pad_shape'])
-                    img_shape = example['img_metas'].data['pad_shape'][0]
+                    num_cam  = len(example['data_samples'].metainfo['pad_shape'])
+                    img_shape = example['data_samples'].metainfo['pad_shape'][0]
                     
                     gt_pv_semantic_mask = np.zeros((num_cam, 1, img_shape[0] // feat_down_sample, img_shape[1] // feat_down_sample), dtype=np.uint8)
                     lidar2img = example['img_metas'].data['lidar2img']
@@ -603,9 +604,9 @@ class VectorizedLocalMap(object):
                 else:
                     gt_semantic_mask = None
                 if self.aux_seg['pv_seg']:
-                    num_cam  = len(example['img_metas'].data['pad_shape'])
+                    num_cam  = len(example['data_samples'].metainfo['pad_shape'])
                     gt_pv_semantic_mask = np.zeros((num_cam, len(self.vec_classes), img_shape[0] // feat_down_sample, img_shape[1] // feat_down_sample), dtype=np.uint8)
-                    lidar2img = example['img_metas'].data['lidar2img']
+                    lidar2img = example['data_samples'].metainfo['lidar2img']
                     scale_factor = np.eye(4)
                     scale_factor[0, 0] *= 1/32
                     scale_factor[1, 1] *= 1/32
@@ -1237,22 +1238,18 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
             info['sample_idx'] = index
         else:
             info['sample_idx'] = len(self) + index
-
         # standard protocal modified from SECOND.Pytorch
         input_dict = dict(
-            sample_idx=info['token'],
-            pts_filename=info['lidar_path'],
-            lidar_path=info["lidar_path"],
-            sweeps=info['sweeps'],
-            ego2global_translation=info['ego2global_translation'],
-            ego2global_rotation=info['ego2global_rotation'],
-            lidar2ego_translation=info['lidar2ego_translation'],
-            lidar2ego_rotation=info['lidar2ego_rotation'],
+            sample_idx = info['sample_idx'],
+            curr_idx=info['token'],
             prev_idx=info['prev'],
             next_idx=info['next'],
             scene_token=info['scene_token'],
+
+            lidar_path=info["lidar_path"],
+            sweeps=info['sweeps'],
+            
             can_bus=info['can_bus'],
-            frame_idx=info['frame_idx'],
             timestamp=info['timestamp'],
             map_location = info['map_location'],
         )
@@ -1261,7 +1258,15 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
         lidar2ego[:3, :3] = Quaternion(info["lidar2ego_rotation"]).rotation_matrix
         lidar2ego[:3, 3] = info["lidar2ego_translation"]
         input_dict["lidar2ego"] = lidar2ego
+
+        # ego to global transform
+        ego2global = np.eye(4).astype(np.float32)
+        ego2global[:3, :3] = Quaternion(info["ego2global_rotation"]).rotation_matrix
+        ego2global[:3, 3] = info["ego2global_translation"]
+        input_dict["ego2global"] = ego2global
+
         if self.modality['use_camera']:
+            camera_type = []
             image_paths = []
             lidar2img_rts = []
             lidar2cam_rts = []
@@ -1270,15 +1275,20 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
             input_dict["camera_intrinsics"] = []
             input_dict["camego2global"] = []
             for cam_type, cam_info in info['cams'].items():
+                camera_type.append(cam_type)
                 image_paths.append(cam_info['data_path'])
                 # obtain lidar to image transformation matrix
-                lidar2cam_r = np.linalg.inv(cam_info['sensor2lidar_rotation'])
+                
+                cam2lidar = np.eye(4)
+                cam2lidar[:3, :3] = cam_info['sensor2lidar_rotation']
+                cam2lidar[:3, 3] = cam_info['sensor2lidar_translation']
+
+                lidar2cam_r = cam_info['sensor2lidar_rotation'].T
                 lidar2cam_t = cam_info[
                     'sensor2lidar_translation'] @ lidar2cam_r.T
-                lidar2cam_rt = np.eye(4)
-                lidar2cam_rt[:3, :3] = lidar2cam_r.T
-                lidar2cam_rt[3, :3] = -lidar2cam_t
-                lidar2cam_rt_t = lidar2cam_rt.T
+                lidar2cam_rt_t = np.eye(4)
+                lidar2cam_rt_t[:3, :3] = lidar2cam_r
+                lidar2cam_rt_t[:3, 3] = -lidar2cam_t
 
                 if self.noise == 'rotation':
                     lidar2cam_rt_t = add_rotation_noise(lidar2cam_rt_t, std=self.noise_std)
@@ -1324,9 +1334,7 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
                     lidar2cam=lidar2cam_rts,
                 ))
 
-        # if not self.test_mode:
-        #     # annos = self.get_ann_info(index)
-        input_dict['ann_info'] = info['annotation']
+        input_dict['annotation'] = info['annotation']
 
         rotation = Quaternion(input_dict['ego2global_rotation'])
         translation = input_dict['ego2global_translation']
@@ -1628,6 +1636,7 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
 
     def parse_data_info(self, info: dict) -> dict:
         """Process the raw data info.
+        called in load_data_list
         """
         return info
 
