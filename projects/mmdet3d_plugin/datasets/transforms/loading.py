@@ -54,8 +54,6 @@ class CustomLoadMultiViewImageFromFiles(BaseTransform):
         """
         filename = results['img_filename']
         # img is of shape (h, w, c, num_views)
-        # img = np.stack(
-        #     [mmcv.imread(name, self.color_type) for name in filename], axis=-1)
         img_list = [mmcv.imread(name, self.color_type) for name in filename]
         img_shape_list = [img.shape for img in img_list]
         max_h = max([shape[0] for shape in img_shape_list])
@@ -68,16 +66,14 @@ class CustomLoadMultiViewImageFromFiles(BaseTransform):
         img = np.stack(img_list,axis=-1)
         if self.to_float32:
             img = img.astype(np.float32)
-        results['filename'] = filename
         # unravel to list, see `DefaultFormatBundle` in formating.py
         # which will transpose each image separately and then stack into array
         results['img'] = [img[..., i] for i in range(img.shape[-1])]
-        results['img_shape'] = img.shape
-        results['ori_shape'] = img.shape
+        results['img_shape'] = [img[..., i].shape for i in range(img.shape[-1])]
+        results['ori_shape'] = [img[..., i].shape for i in range(img.shape[-1])]
         # Set initial values for default meta_keys
-        results['pad_shape'] = img.shape
-        results['scale_factor'] = 1.0
-        import pdb;pdb.set_trace()
+        results['pad_shape'] = [img[..., i].shape for i in range(img.shape[-1])]
+
         if results.get('is_vis_on_test', False):
             dir_name = "./tmp/CustomLoadMultiViewImageFromFiles"
             os.makedirs(dir_name, exist_ok=True)
@@ -430,21 +426,10 @@ class CustomPointToMultiViewDepth(BaseTransform):
         depth_map_list = []
         
         for cid in range(len(imgs)):
-            
-            lidar2lidarego = torch.tensor(results['lidar2ego']).to(torch.float32)
-            lidarego2global = np.eye(4, dtype=np.float32)
-            lidarego2global[:3, :3] = Quaternion(results['ego2global_rotation']).rotation_matrix
-            lidarego2global[:3, 3] = results['ego2global_translation']
-            lidarego2global = torch.from_numpy(lidarego2global)
-            cam2camego = torch.tensor(results['camera2ego'][cid])
-
-            camego2global = results['camego2global'][cid]
-
             cam2img = torch.tensor(intrins[cid]).to(torch.float32)
-            
-            lidar2cam = torch.inverse(camego2global.matmul(cam2camego)).matmul(
-                lidarego2global.matmul(lidar2lidarego))
+            lidar2cam = torch.tensor(results['lidar2cam'][cid]).to(torch.float32)
             lidar2img = cam2img.matmul(lidar2cam)
+
             points_img = points_lidar.tensor[:, :3].matmul(
                 lidar2img[:3, :3].T.to(torch.float)) + lidar2img[:3, 3].to(torch.float).unsqueeze(0)
             points_img = torch.cat(
@@ -457,6 +442,7 @@ class CustomPointToMultiViewDepth(BaseTransform):
             depth_map_list.append(depth_map)
         
         depth_map = torch.stack(depth_map_list)
+
         ##################################################################
         if results.get('is_vis_on_test', False):
             dir_name = "./tmp/CustomPointToMultiViewDepth"

@@ -64,7 +64,7 @@ train_pipeline = [
     dict(
         type='mmdet3d.CustomPack3DDetInputs',
         keys=[
-            'img', 'depths', 'gt_labels_3d'
+            'img', 'points', 'gt_depth'
         ],
         pad_size_divisor=32)
 ]

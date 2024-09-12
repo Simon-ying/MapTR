@@ -146,7 +146,6 @@ class RandomScaleImageMultiViewImage(BaseTransform):
         results['lidar2img'] = lidar2img
         results['img_aug_matrix'] = img_aug_matrix
         results['img_shape'] = [img.shape for img in results['img']]
-        results['ori_shape'] = [img.shape for img in results['img']]
 
         if results.get('is_vis_on_test', False):
             dir_name = "./tmp/RandomScaleImageMultiViewImage"

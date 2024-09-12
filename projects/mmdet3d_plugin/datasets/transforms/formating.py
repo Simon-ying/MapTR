@@ -5,13 +5,13 @@ import mmengine
 import numpy as np
 import torch
 from mmcv import BaseTransform
-from mmengine.structures import InstanceData
+from mmengine.structures import InstanceData, PixelData
 from numpy import dtype
 
 from mmdet3d.registry import TRANSFORMS
 from mmdet3d.structures import BaseInstance3DBoxes, Det3DDataSample, PointData
 from mmdet3d.structures.points import BasePoints
-from projects.mmdet3d_plugin.models.data_preprocessors.utils import multiview_img_stack_batch
+from mmdet3d_plugin.structures import MapTRDataSample
 
 def to_tensor(
     data: Union[torch.Tensor, np.ndarray, Sequence, int,
@@ -49,22 +49,26 @@ def to_tensor(
 class CustomPack3DDetInputs(BaseTransform):
     INPUTS_KEYS = ['points', 'img']
     INSTANCEDATA_3D_KEYS = [
-        'gt_bboxes_3d', 'gt_labels_3d', 'attr_labels', 'depths', 'centers_2d'
+        'gt_bboxes_3d', 'gt_labels_3d', 'attr_labels',
     ]
     INSTANCEDATA_2D_KEYS = [
         'gt_bboxes',
         'gt_bboxes_labels',
     ]
-
     SEG_KEYS = [
         'gt_seg_map', 'pts_instance_mask', 'pts_semantic_mask',
-        'gt_semantic_seg'
+        'gt_semantic_seg',
     ]
-
+    SEM_KEYS = [
+        'gt_depth',
+    ]
     def __init__(
         self,
         keys: tuple,
-        meta_keys: tuple = ('ann_info', 'cam_intrinsic', '', 'lidar2img'),
+        meta_keys: tuple = ('sample_idx', 'curr_idx', 'prev_idx', 'next_idx', 'scene_token', 
+                            'can_bus', 'timestamp', 'map_location', 'lidar2ego', 'ego2global',
+                            'lidar2global', 'camera2ego', 'camego2global', 'lidar2cam', 
+                            'lidar2img', 'cam_intrinsic', 'annotation'),
         pad_size_divisor = 1
     ) -> None:
         self.keys = keys
@@ -93,7 +97,7 @@ class CustomPack3DDetInputs(BaseTransform):
                 - points
                 - img
 
-            - 'data_samples' (:obj:`Det3DDataSample`): The annotation info of
+            - 'data_samples' (:obj:`MapTRDataSample`): The annotation info of
               the sample.
         """
         # augtest
@@ -127,7 +131,7 @@ class CustomPack3DDetInputs(BaseTransform):
                 - points
                 - img
 
-            - 'data_samples' (:obj:`Det3DDataSample`): The annotation info
+            - 'data_samples' (:obj:`MapTRDataSample`): The annotation info
               of the sample.
         """
         # Format 3D data
@@ -163,29 +167,20 @@ class CustomPack3DDetInputs(BaseTransform):
                 results['img'] = img
 
         # TODO: transform corresponding key to tensor
-        for key in []:
+        for key in ['can_bus', 'lidar2ego', 'ego2global',
+                    'lidar2global', 'camera2ego', 'camego2global',
+                    'lidar2cam', 'lidar2img', 'cam_intrinsic']:
             if key not in results:
                 continue
             if isinstance(results[key], list):
                 results[key] = [to_tensor(res) for res in results[key]]
             else:
                 results[key] = to_tensor(results[key])
-        if 'gt_bboxes_3d' in results:
-            if not isinstance(results['gt_bboxes_3d'], BaseInstance3DBoxes):
-                results['gt_bboxes_3d'] = to_tensor(results['gt_bboxes_3d'])
 
-        if 'gt_semantic_seg' in results:
-            results['gt_semantic_seg'] = to_tensor(
-                results['gt_semantic_seg'][None])
-        if 'gt_seg_map' in results:
-            results['gt_seg_map'] = results['gt_seg_map'][None, ...]
-
-        data_sample = Det3DDataSample()
+        data_sample = MapTRDataSample()
         gt_instances_3d = InstanceData()
-        gt_instances = InstanceData()
-        gt_pts_seg = PointData()
+        gt_depth = PixelData()
 
-        import pdb;pdb.set_trace()
         # create metainfo
         data_metas = {}
         pad_h = int(
@@ -199,26 +194,8 @@ class CustomPack3DDetInputs(BaseTransform):
         for key in self.meta_keys:
             if key in results:
                 data_metas[key] = results[key]
-            elif 'images' in results:
-                if len(results['images'].keys()) == 1:
-                    cam_type = list(results['images'].keys())[0]
-                    # single-view image
-                    if key in results['images'][cam_type]:
-                        data_metas[key] = results['images'][cam_type][key]
-                else:
-                    # multi-view image
-                    img_metas = []
-                    cam_types = list(results['images'].keys())
-                    for cam_type in cam_types:
-                        if key in results['images'][cam_type]:
-                            img_metas.append(results['images'][cam_type][key])
-                    if len(img_metas) > 0:
-                        data_metas[key] = img_metas
-            elif 'lidar_points' in results:
-                if key in results['lidar_points']:
-                    data_metas[key] = results['lidar_points'][key]
-        data_sample.set_metainfo(data_metas)
 
+        data_sample.set_metainfo(data_metas)
         inputs = {}
         for key in self.keys:
             if key in results:
@@ -226,13 +203,9 @@ class CustomPack3DDetInputs(BaseTransform):
                     inputs[key] = results[key]
                 elif key in self.INSTANCEDATA_3D_KEYS:
                     gt_instances_3d[self._remove_prefix(key)] = results[key]
-                elif key in self.INSTANCEDATA_2D_KEYS:
-                    if key == 'gt_bboxes_labels':
-                        gt_instances['labels'] = results[key]
-                    else:
-                        gt_instances[self._remove_prefix(key)] = results[key]
-                elif key in self.SEG_KEYS:
-                    gt_pts_seg[self._remove_prefix(key)] = results[key]
+                elif key in self.SEM_KEYS:
+                    import pdb;pdb.set_trace()
+                    gt_sem_seg[self._remove_prefix(key)] = results[key]
                 else:
                     raise NotImplementedError(f'Please modified '
                                               f'`Pack3DDetInputs` '
@@ -242,6 +215,7 @@ class CustomPack3DDetInputs(BaseTransform):
         data_sample.gt_instances_3d = gt_instances_3d
         data_sample.gt_instances = gt_instances
         data_sample.gt_pts_seg = gt_pts_seg
+        data_sample.gt_sem_seg = gt_sem_seg
         if 'eval_ann_info' in results:
             data_sample.eval_ann_info = results['eval_ann_info']
         else:
