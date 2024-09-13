@@ -10,6 +10,7 @@ import torch
 import numpy as np
 from nuscenes.eval.common.utils import quaternion_yaw, Quaternion
 from projects.mmdet3d_plugin.models.utils.visual import save_tensor
+from projects.mmdet3d_plugin.structures import MultiViewPixelData
 import random
 from mmdet3d.structures import LiDARInstance3DBoxes
 from mmengine.structures import PixelData
@@ -1142,16 +1143,16 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
 
         # gt_seg_mask = torch.tensor(anns_results['gt_semantic_mask'])
         # gt_pv_seg_mask = torch.tensor(anns_results['gt_pv_semantic_mask'])
-        gt_sem_seg = example['data_samples'].gt_sem_seg
+        
+        gt_bev_mask = PixelData()
+        gt_pv_mask = MultiViewPixelData()
         if anns_results['gt_semantic_mask'] is not None:
-            gt_sem_seg['seg_mask'] = torch.tensor(anns_results['gt_semantic_mask'])
-        else:
-            gt_sem_seg['seg_mask'] = torch.tensor(0)
+            gt_bev_mask.set_field(torch.tensor(anns_results['gt_semantic_mask']), "seg_mask")
         if anns_results['gt_pv_semantic_mask'] is not None:
-            gt_sem_seg['pv_seg_mask'] = torch.tensor(anns_results['gt_pv_semantic_mask'])
-        else:
-            gt_sem_seg['pv_seg_mask'] = torch.tensor(0)
-        example['data_samples'].gt_sem_seg = gt_sem_seg
+            gt_pv_mask.set_field(torch.tensor(anns_results['gt_pv_semantic_mask']), 'pv_seg_mask')
+
+        example['data_samples'].gt_bev_seg = gt_bev_mask
+        example['data_samples'].gt_pv_seg = gt_pv_mask
         return example
 
     def prepare_train_data(self, index):

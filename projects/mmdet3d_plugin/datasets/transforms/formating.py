@@ -11,7 +11,7 @@ from numpy import dtype
 from mmdet3d.registry import TRANSFORMS
 from mmdet3d.structures import BaseInstance3DBoxes, Det3DDataSample, PointData
 from mmdet3d.structures.points import BasePoints
-from mmdet3d_plugin.structures import MapTRDataSample
+from projects.mmdet3d_plugin.structures import MapTRDataSample, MultiViewPixelData
 
 def to_tensor(
     data: Union[torch.Tensor, np.ndarray, Sequence, int,
@@ -59,7 +59,7 @@ class CustomPack3DDetInputs(BaseTransform):
         'gt_seg_map', 'pts_instance_mask', 'pts_semantic_mask',
         'gt_semantic_seg',
     ]
-    SEM_KEYS = [
+    DEPTH_KEYS = [
         'gt_depth',
     ]
     def __init__(
@@ -179,7 +179,7 @@ class CustomPack3DDetInputs(BaseTransform):
 
         data_sample = MapTRDataSample()
         gt_instances_3d = InstanceData()
-        gt_depth = PixelData()
+        gt_depth = MultiViewPixelData()
 
         # create metainfo
         data_metas = {}
@@ -203,9 +203,8 @@ class CustomPack3DDetInputs(BaseTransform):
                     inputs[key] = results[key]
                 elif key in self.INSTANCEDATA_3D_KEYS:
                     gt_instances_3d[self._remove_prefix(key)] = results[key]
-                elif key in self.SEM_KEYS:
-                    import pdb;pdb.set_trace()
-                    gt_sem_seg[self._remove_prefix(key)] = results[key]
+                elif key in self.DEPTH_KEYS:
+                    gt_depth.set_field(results[key], self._remove_prefix(key))
                 else:
                     raise NotImplementedError(f'Please modified '
                                               f'`Pack3DDetInputs` '
@@ -213,9 +212,8 @@ class CustomPack3DDetInputs(BaseTransform):
                                               f'corresponding field')
 
         data_sample.gt_instances_3d = gt_instances_3d
-        data_sample.gt_instances = gt_instances
-        data_sample.gt_pts_seg = gt_pts_seg
-        data_sample.gt_sem_seg = gt_sem_seg
+        data_sample.gt_depth = gt_depth
+
         if 'eval_ann_info' in results:
             data_sample.eval_ann_info = results['eval_ann_info']
         else:
