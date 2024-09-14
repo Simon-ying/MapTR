@@ -1,6 +1,6 @@
 _base_ = [
-    '../datasets/custom_nus-3d.py',
-    '../_base_/default_runtime.py'
+    '../projects/configs/datasets/custom_nus-3d.py',
+    '../projects/configs/_base_/default_runtime.py'
 ]
 
 custom_imports = dict(imports=['projects.mmdet3d_plugin'], allow_failed_imports=False)
@@ -151,7 +151,7 @@ model = dict(
                             num_heads=8,
                             dropout=0.1),
                          dict(
-                            type='CustomMSDeformableAttention',
+                            type='mmdet3d.CustomMSDeformableAttention',
                             embed_dims=_dim_,
                             num_levels=1),
                     ],
@@ -169,7 +169,7 @@ model = dict(
             voxel_size=voxel_size,
             num_classes=num_map_classes),
         positional_encoding=dict(
-            type='LearnedPositionalEncoding',
+            type='LearnedPositionalEncoding3D',
             num_feats=_pos_dim_,
             row_num_embed=bev_h_,
             col_num_embed=bev_w_,

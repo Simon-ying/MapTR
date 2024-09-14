@@ -8,7 +8,7 @@ from mmcv import BaseTransform
 from mmengine.structures import InstanceData, PixelData
 from numpy import dtype
 
-from mmdet3d.registry import TRANSFORMS
+from mmengine.registry import TRANSFORMS
 from mmdet3d.structures import BaseInstance3DBoxes, Det3DDataSample, PointData
 from mmdet3d.structures.points import BasePoints
 from projects.mmdet3d_plugin.structures import MapTRDataSample, MultiViewPixelData

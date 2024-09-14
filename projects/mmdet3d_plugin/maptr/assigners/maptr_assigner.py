@@ -107,10 +107,10 @@ class MapTRAssigner(BaseAssigner):
                  pts_cost=dict(type='ChamferDistance',loss_src_weight=1.0,loss_dst_weight=1.0),
                  pc_range=None):
         self.z_cfg = z_cfg
-        self.cls_cost = MODELS.build(cls_cost)
-        self.reg_cost = MODELS.build(reg_cost)
-        self.iou_cost = MODELS.build(iou_cost)
-        self.pts_cost = MODELS.build(pts_cost)
+        self.cls_cost = TASK_UTILS.build(cls_cost)
+        self.reg_cost = TASK_UTILS.build(reg_cost)
+        self.iou_cost = TASK_UTILS.build(iou_cost)
+        self.pts_cost = TASK_UTILS.build(pts_cost)
         self.pc_range = pc_range
 
     def assign(self,

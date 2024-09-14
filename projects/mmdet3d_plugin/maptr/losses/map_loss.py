@@ -4,7 +4,8 @@ import torch
 from torch import nn as nn
 from torch.nn.functional import l1_loss, mse_loss, smooth_l1_loss
 
-from mmdet.registry import MODELS, TASK_UTILS
+from mmdet3d.registry import MODELS
+from mmdet.registry import TASK_UTILS
 from mmdet.models import weighted_loss
 import mmcv
 import torch.nn.functional as F

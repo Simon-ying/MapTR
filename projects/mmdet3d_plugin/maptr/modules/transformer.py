@@ -4,7 +4,7 @@ import torch.nn as nn
 import numpy as np
 from torch.nn.init import normal_
 import torch.nn.functional as F
-from mmdet.registry import MODELS
+from mmdet3d.registry import MODELS
 from mmengine.model import BaseModule, xavier_init, constant_init
 from mmcv.cnn.bricks.transformer import build_transformer_layer_sequence
 from torchvision.transforms.functional import rotate

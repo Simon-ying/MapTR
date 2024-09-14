@@ -97,7 +97,7 @@ dataset = CustomNuScenesOfflineLocalMapDataset(
     eval_use_same_gt_sample_num_flag=eval_use_same_gt_sample_num_flag,
     padding_value=-10000,
     queue_length=queue_length,
-    is_vis_on_test=True
+    is_vis_on_test=False
 ) 
 
 item = dataset[0]

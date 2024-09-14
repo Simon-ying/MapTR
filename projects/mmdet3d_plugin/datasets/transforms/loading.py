@@ -8,7 +8,7 @@ from PIL import Image
 import mmengine
 import mmcv
 from mmdet3d.structures.points import BasePoints, get_points_type
-from mmdet3d.registry import TRANSFORMS
+from mmengine.registry import TRANSFORMS
 from mmcv.transforms import BaseTransform
 import cv2 as cv
 from .loading_utils import load_augmented_point_cloud, reduce_LiDAR_beams

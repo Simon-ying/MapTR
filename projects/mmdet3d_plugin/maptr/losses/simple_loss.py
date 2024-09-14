@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from mmdet.registry import MODELS
+from mmdet3d.registry import MODELS
 import torch.nn.functional as F
 from mmdet.models.losses import FocalLoss, weight_reduce_loss
 

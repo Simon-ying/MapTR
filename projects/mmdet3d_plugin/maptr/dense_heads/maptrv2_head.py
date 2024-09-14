@@ -2,7 +2,7 @@ import copy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from mmdet.registry import MODELS
+from mmdet3d.registry import MODELS
 from mmdet.models.dense_heads import DETRHead
 from mmdet3d.registry import TASK_UTILS
 from mmcv.cnn import Linear
@@ -91,15 +91,19 @@ class MapTRv2Head(DETRHead):
 
     def __init__(self,
                  *args,
+                 num_classes=4,
+                 in_channels=256,
+                 sync_cls_avg_factor=False,
                  with_box_refine=False,
                  as_two_stage=False,
                  transformer=None,
                  bbox_coder=None,
                  num_cls_fcs=2,
+                 code_size=-1,
                  code_weights=None,
                  bev_h=30,
                  bev_w=30,
-                #  num_vec=20,
+                 num_query=100,
                  num_vec_one2one=50,
                  num_vec_one2many=0,
                  k_one2many=0,
@@ -131,18 +135,23 @@ class MapTRv2Head(DETRHead):
                               pos_weight=2.13,
                               loss_weight=1.0),
                  loss_dir=dict(type='PtsDirCosLoss', loss_weight=2.0),
+                 positional_encoding=dict(
+                     type='LearnedPositionalEncoding',
+                     num_feats=256,
+                     row_num_embed=30,
+                     col_num_embed=30),
                  **kwargs):
 
         self.bev_h = bev_h
         self.bev_w = bev_w
-        self.fp16_enabled = False
+        self.num_query = num_query
 
         self.with_box_refine = with_box_refine
         self.as_two_stage = as_two_stage
         self.bev_encoder_type = transformer.encoder.type
         if self.as_two_stage:
             transformer['as_two_stage'] = self.as_two_stage
-        if 'code_size' in kwargs:
+        if code_size > 0:
             self.code_size = 2 if not z_cfg['pred_z_flag'] else 3
         else:
             self.code_size = 2
@@ -172,9 +181,16 @@ class MapTRv2Head(DETRHead):
         self.dir_interval = dir_interval
         self.aux_seg = aux_seg
         self.z_cfg = z_cfg
-        
+        self.transformer = None # predefine to skip _init_layers
         super(MapTRv2Head, self).__init__(
-            *args, transformer=transformer, **kwargs)
+            *args,
+            num_classes=num_classes,
+            embed_dims=in_channels,
+            sync_cls_avg_factor=sync_cls_avg_factor,
+            **kwargs)
+        
+        self.positional_encoding = TASK_UTILS.build(positional_encoding)
+        self.transformer = MODELS.build(transformer)
         self.code_weights = nn.Parameter(torch.tensor(
             self.code_weights, requires_grad=False), requires_grad=False)
         self.loss_pts = MODELS.build(loss_pts)
@@ -197,73 +213,74 @@ class MapTRv2Head(DETRHead):
         self._init_layers()
 
     def _init_layers(self):
-        """Initialize classification branch and regression branch of head."""
-        cls_branch = []
-        # cls_branch.append(Linear(self.embed_dims * 2, self.embed_dims))
-        # cls_branch.append(nn.LayerNorm(self.embed_dims))
-        # cls_branch.append(nn.ReLU(inplace=True))
-        for _ in range(self.num_reg_fcs):
-            cls_branch.append(Linear(self.embed_dims, self.embed_dims))
-            cls_branch.append(nn.LayerNorm(self.embed_dims))
-            cls_branch.append(nn.ReLU(inplace=True))
-        cls_branch.append(Linear(self.embed_dims, self.cls_out_channels))
-        fc_cls = nn.Sequential(*cls_branch)
+        if self.transformer:
+            """Initialize classification branch and regression branch of head."""
+            cls_branch = []
+            # cls_branch.append(Linear(self.embed_dims * 2, self.embed_dims))
+            # cls_branch.append(nn.LayerNorm(self.embed_dims))
+            # cls_branch.append(nn.ReLU(inplace=True))
+            for _ in range(self.num_reg_fcs):
+                cls_branch.append(Linear(self.embed_dims, self.embed_dims))
+                cls_branch.append(nn.LayerNorm(self.embed_dims))
+                cls_branch.append(nn.ReLU(inplace=True))
+            cls_branch.append(Linear(self.embed_dims, self.cls_out_channels))
+            fc_cls = nn.Sequential(*cls_branch)
 
-        reg_branch = []
-        for _ in range(self.num_reg_fcs):
-            reg_branch.append(Linear(self.embed_dims, self.embed_dims))
-            reg_branch.append(nn.ReLU())
-        reg_branch.append(Linear(self.embed_dims, self.code_size))
-        reg_branch = nn.Sequential(*reg_branch)
+            reg_branch = []
+            for _ in range(self.num_reg_fcs):
+                reg_branch.append(Linear(self.embed_dims, self.embed_dims))
+                reg_branch.append(nn.ReLU())
+            reg_branch.append(Linear(self.embed_dims, self.code_size))
+            reg_branch = nn.Sequential(*reg_branch)
 
-        def _get_clones(module, N):
-            return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
+            def _get_clones(module, N):
+                return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 
-        # last reg_branch is used to generate proposal from
-        # encode feature map when as_two_stage is True.
-        num_pred = (self.transformer.decoder.num_layers + 1) if \
-            self.as_two_stage else self.transformer.decoder.num_layers
+            # last reg_branch is used to generate proposal from
+            # encode feature map when as_two_stage is True.
+            num_pred = (self.transformer.decoder.num_layers + 1) if \
+                self.as_two_stage else self.transformer.decoder.num_layers
 
-        if self.with_box_refine:
-            self.cls_branches = _get_clones(fc_cls, num_pred)
-            self.reg_branches = _get_clones(reg_branch, num_pred)
-        else:
-            self.cls_branches = nn.ModuleList(
-                [fc_cls for _ in range(num_pred)])
-            self.reg_branches = nn.ModuleList(
-                [reg_branch for _ in range(num_pred)])
-
-        if self.aux_seg['use_aux_seg']:
-            if not (self.aux_seg['bev_seg'] or self.aux_seg['pv_seg']):
-                raise ValueError('aux_seg must have bev_seg or pv_seg')
-            if self.aux_seg['bev_seg']:
-                self.seg_head = nn.Sequential(
-                    nn.Conv2d(self.embed_dims, self.embed_dims, kernel_size=3, padding=1, bias=False),
-                    # nn.BatchNorm2d(128),
-                    nn.ReLU(inplace=True),
-                    nn.Conv2d(self.embed_dims, self.aux_seg['seg_classes'], kernel_size=1, padding=0)
-                )
-            if self.aux_seg['pv_seg']:            
-                self.pv_seg_head = nn.Sequential(
-                    nn.Conv2d(self.embed_dims, self.embed_dims, kernel_size=3, padding=1, bias=False),
-                    # nn.BatchNorm2d(128),
-                    nn.ReLU(inplace=True),
-                    nn.Conv2d(self.embed_dims, self.aux_seg['seg_classes'], kernel_size=1, padding=0)
-                )
-
-        if not self.as_two_stage:
-            if 'BEVFormerEncoder' in self.bev_encoder_type:
-                self.bev_embedding = nn.Embedding(
-                    self.bev_h * self.bev_w, self.embed_dims)
+            if self.with_box_refine:
+                self.cls_branches = _get_clones(fc_cls, num_pred)
+                self.reg_branches = _get_clones(reg_branch, num_pred)
             else:
-                self.bev_embedding = None
-            if self.query_embed_type == 'all_pts':
-                self.query_embedding = nn.Embedding(self.num_query,
-                                                    self.embed_dims * 2)
-            elif self.query_embed_type == 'instance_pts':
-                self.query_embedding = None
-                self.instance_embedding = nn.Embedding(self.num_vec, self.embed_dims * 2)
-                self.pts_embedding = nn.Embedding(self.num_pts_per_vec, self.embed_dims * 2)
+                self.cls_branches = nn.ModuleList(
+                    [fc_cls for _ in range(num_pred)])
+                self.reg_branches = nn.ModuleList(
+                    [reg_branch for _ in range(num_pred)])
+
+            if self.aux_seg['use_aux_seg']:
+                if not (self.aux_seg['bev_seg'] or self.aux_seg['pv_seg']):
+                    raise ValueError('aux_seg must have bev_seg or pv_seg')
+                if self.aux_seg['bev_seg']:
+                    self.seg_head = nn.Sequential(
+                        nn.Conv2d(self.embed_dims, self.embed_dims, kernel_size=3, padding=1, bias=False),
+                        # nn.BatchNorm2d(128),
+                        nn.ReLU(inplace=True),
+                        nn.Conv2d(self.embed_dims, self.aux_seg['seg_classes'], kernel_size=1, padding=0)
+                    )
+                if self.aux_seg['pv_seg']:            
+                    self.pv_seg_head = nn.Sequential(
+                        nn.Conv2d(self.embed_dims, self.embed_dims, kernel_size=3, padding=1, bias=False),
+                        # nn.BatchNorm2d(128),
+                        nn.ReLU(inplace=True),
+                        nn.Conv2d(self.embed_dims, self.aux_seg['seg_classes'], kernel_size=1, padding=0)
+                    )
+
+            if not self.as_two_stage:
+                if 'BEVFormerEncoder' in self.bev_encoder_type:
+                    self.bev_embedding = nn.Embedding(
+                        self.bev_h * self.bev_w, self.embed_dims)
+                else:
+                    self.bev_embedding = None
+                if self.query_embed_type == 'all_pts':
+                    self.query_embedding = nn.Embedding(self.num_query,
+                                                        self.embed_dims * 2)
+                elif self.query_embed_type == 'instance_pts':
+                    self.query_embedding = None
+                    self.instance_embedding = nn.Embedding(self.num_vec, self.embed_dims * 2)
+                    self.pts_embedding = nn.Embedding(self.num_pts_per_vec, self.embed_dims * 2)
 
     def init_weights(self):
         """Initialize weights of the DeformDETR head."""

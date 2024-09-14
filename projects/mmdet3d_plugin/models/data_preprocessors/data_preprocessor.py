@@ -12,7 +12,7 @@ from mmengine.utils import is_seq_of
 from torch import Tensor
 from torch.nn import functional as F
 
-from mmdet3d.registry import MODELS
+from mmengine.registry import MODELS
 from mmdet3d.structures.det3d_data_sample import SampleList
 from mmdet3d.utils import OptConfigType
 from .utils import multiview_img_stack_batch

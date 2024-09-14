@@ -1,7 +1,7 @@
 import numpy as np
 from numpy import random
 import mmcv
-from mmdet3d.registry import TRANSFORMS
+from mmengine.registry import TRANSFORMS
 from mmdet.datasets.transforms import (PhotoMetricDistortion, RandomCrop,
                                        RandomFlip)
 from mmcv.transforms import BaseTransform, Compose, RandomResize, Resize

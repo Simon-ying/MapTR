@@ -1,7 +1,7 @@
 import copy
 import itertools
 import numpy as np
-from mmdet.registry import DATASETS
+from mmdet3d.registry import DATASETS
 from mmdet3d.datasets import NuScenesDataset
 import mmengine
 import os
@@ -1177,9 +1177,8 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
         scene_token = input_dict['scene_token']
         example = self.pipeline(input_dict)
         example = self.vectormap_pipeline(example, input_dict)
-        import pdb;pdb.set_trace()
         if self.filter_empty_gt and \
-                (example is None or ~(example['gt_labels_3d']._data != -1).any()):
+                (example is None or ~(example['data_samples'].gt_instances_3d['labels_3d'] != -1).any()):
             return None
         data_queue.insert(0, example)
         for i in prev_indexs_list:
@@ -1191,7 +1190,7 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
                 example = self.pipeline(input_dict)
                 example = self.vectormap_pipeline(example,input_dict)
                 if self.filter_empty_gt and \
-                        (example is None or ~(example['gt_labels_3d']._data != -1).any()):
+                        (example is None or ~(example['data_samples'].gt_instances_3d['labels_3d'] != -1).any()):
                     return None
                 sample_idx = input_dict['sample_idx']
             data_queue.insert(0, copy.deepcopy(example))
@@ -1202,12 +1201,12 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
         convert sample queue into one single sample.
         """
         
-        imgs_list = [each['img'].data for each in queue]
+        imgs_list = [each['inputs']['img'] for each in queue]
         metas_map = {}
         prev_pos = None
         prev_angle = None
         for i, each in enumerate(queue):
-            metas_map[i] = each['img_metas'].data
+            metas_map[i] = each['data_samples'].metainfo
             if i == 0:
                 metas_map[i]['prev_bev'] = False
                 prev_lidar2global = metas_map[i]['lidar2global']
@@ -1240,9 +1239,8 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
                 prev_angle = copy.deepcopy(tmp_angle)
                 prev_lidar2global = copy.deepcopy(tmp_lidar2global)
 
-        queue[-1]['img'] = DC(torch.stack(imgs_list),
-                              cpu_only=False, stack=True)
-        queue[-1]['img_metas'] = DC(metas_map, cpu_only=True)
+        queue[-1]['inputs']['img'] = torch.stack(imgs_list)
+        queue[-1]['data_samples'].set_metainfo({"metas_map":metas_map})
         queue = queue[-1]
         return queue
 
