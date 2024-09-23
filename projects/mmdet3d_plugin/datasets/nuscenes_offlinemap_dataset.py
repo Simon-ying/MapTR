@@ -1206,41 +1206,42 @@ class CustomNuScenesOfflineLocalMapDataset(CustomNuScenesDataset):
         prev_pos = None
         prev_angle = None
         for i, each in enumerate(queue):
-            metas_map[i] = each['data_samples'].metainfo
+            metas_map[i] = each['data_samples']
+            metainfo_i = copy.deepcopy(metas_map[i].metainfo)
             if i == 0:
-                metas_map[i]['prev_bev'] = False
-                prev_lidar2global = metas_map[i]['lidar2global']
-                prev_pos = copy.deepcopy(metas_map[i]['can_bus'][:3])
-                prev_angle = copy.deepcopy(metas_map[i]['can_bus'][-1])
-                metas_map[i]['can_bus'][:3] = 0
-                metas_map[i]['can_bus'][-1] = 0
+                metainfo_i['prev_bev'] = False
+                prev_lidar2global = metainfo_i['lidar2global']
+                prev_pos = copy.deepcopy(metainfo_i['can_bus'][:3])
+                prev_angle = copy.deepcopy(metainfo_i['can_bus'][-1])
+                metainfo_i['can_bus'][:3] = 0
+                metainfo_i['can_bus'][-1] = 0
                 tmp_lidar2prev_lidar = np.eye(4)
-                metas_map[i]['tmp_lidar2prev_lidar'] = tmp_lidar2prev_lidar
+                metainfo_i['tmp_lidar2prev_lidar'] = tmp_lidar2prev_lidar
                 tmp_lidar2prev_lidar_translation = tmp_lidar2prev_lidar[:3,3]
                 tmp_lidar2prev_lidar_angle = quaternion_yaw(Quaternion(
                                                 matrix=tmp_lidar2prev_lidar)) / np.pi * 180
-                metas_map[i]['tmp_lidar2prev_lidar_translation'] = tmp_lidar2prev_lidar_translation
-                metas_map[i]['tmp_lidar2prev_lidar_angle'] = tmp_lidar2prev_lidar_angle
+                metainfo_i['tmp_lidar2prev_lidar_translation'] = tmp_lidar2prev_lidar_translation
+                metainfo_i['tmp_lidar2prev_lidar_angle'] = tmp_lidar2prev_lidar_angle
             else:
-                metas_map[i]['prev_bev'] = True
-                tmp_lidar2global = metas_map[i]['lidar2global']
+                metainfo_i['prev_bev'] = True
+                tmp_lidar2global = metainfo_i['lidar2global']
                 tmp_lidar2prev_lidar = np.linalg.inv(prev_lidar2global)@tmp_lidar2global
                 tmp_lidar2prev_lidar_translation = tmp_lidar2prev_lidar[:3,3]
                 tmp_lidar2prev_lidar_angle = quaternion_yaw(Quaternion(
                                                 matrix=tmp_lidar2prev_lidar)) / np.pi * 180
-                tmp_pos = copy.deepcopy(metas_map[i]['can_bus'][:3])
-                tmp_angle = copy.deepcopy(metas_map[i]['can_bus'][-1])
-                metas_map[i]['can_bus'][:3] -= prev_pos
-                metas_map[i]['can_bus'][-1] -= prev_angle
-                metas_map[i]['tmp_lidar2prev_lidar'] = tmp_lidar2prev_lidar
-                metas_map[i]['tmp_lidar2prev_lidar_translation'] = tmp_lidar2prev_lidar_translation
-                metas_map[i]['tmp_lidar2prev_lidar_angle'] = tmp_lidar2prev_lidar_angle
+                tmp_pos = copy.deepcopy(metainfo_i['can_bus'][:3])
+                tmp_angle = copy.deepcopy(metainfo_i['can_bus'][-1])
+                metainfo_i['can_bus'][:3] -= prev_pos
+                metainfo_i['can_bus'][-1] -= prev_angle
+                metainfo_i['tmp_lidar2prev_lidar'] = tmp_lidar2prev_lidar
+                metainfo_i['tmp_lidar2prev_lidar_translation'] = tmp_lidar2prev_lidar_translation
+                metainfo_i['tmp_lidar2prev_lidar_angle'] = tmp_lidar2prev_lidar_angle
                 prev_pos = copy.deepcopy(tmp_pos)
                 prev_angle = copy.deepcopy(tmp_angle)
                 prev_lidar2global = copy.deepcopy(tmp_lidar2global)
-
+            metas_map[i].set_metainfo(metainfo_i)
         queue[-1]['inputs']['img'] = torch.stack(imgs_list)
-        queue[-1]['data_samples'].set_metainfo({"metas_map":metas_map})
+        queue[-1]['data_samples'] = metas_map
         queue = queue[-1]
         return queue
 

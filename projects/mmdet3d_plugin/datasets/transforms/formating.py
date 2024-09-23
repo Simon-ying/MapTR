@@ -68,7 +68,7 @@ class CustomPack3DDetInputs(BaseTransform):
         meta_keys: tuple = ('sample_idx', 'curr_idx', 'prev_idx', 'next_idx', 'scene_token', 
                             'can_bus', 'timestamp', 'map_location', 'lidar2ego', 'ego2global',
                             'lidar2global', 'camera2ego', 'camego2global', 'lidar2cam', 
-                            'lidar2img', 'cam_intrinsic', 'annotation'),
+                            'lidar2img', 'cam_intrinsic', 'annotation', 'img_aug_matrix'),
         pad_size_divisor = 1
     ) -> None:
         self.keys = keys

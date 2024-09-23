@@ -169,7 +169,7 @@ model = dict(
             voxel_size=voxel_size,
             num_classes=num_map_classes),
         positional_encoding=dict(
-            type='LearnedPositionalEncoding',
+            type='LearnedPositionalEncoding3D',
             num_feats=_pos_dim_,
             row_num_embed=bev_h_,
             col_num_embed=bev_w_,
@@ -198,13 +198,13 @@ model = dict(
         point_cloud_range=point_cloud_range,
         out_size_factor=4,
         assigner=dict(
-            type='MapTRAssigner',
+            type='mmdet.MapTRAssigner',
             cls_cost=dict(type='mmdet.FocalLossCost', weight=2.0),
-            reg_cost=dict(type='BBoxL1Cost', weight=0.0, box_format='xywh'),
+            reg_cost=dict(type='mmdet.BBoxL1Cost', weight=0.0, box_format='xywh'),
             # reg_cost=dict(type='BBox3DL1Cost', weight=0.25),
             # iou_cost=dict(type='IoUCost', weight=1.0), # Fake cost. This is just to make it compatible with DETR head.
             iou_cost=dict(type='mmdet.IoUCost', iou_mode='giou', weight=0.0),
-            pts_cost=dict(type='OrderedPtsL1Cost', 
+            pts_cost=dict(type='mmdet.OrderedPtsL1Cost', 
                       weight=5),
             pc_range=point_cloud_range))))
 
@@ -248,7 +248,7 @@ test_pipeline = [
 ]
 
 train_dataloader = dict(
-    batch_size=1,
+    batch_size=2,
     num_workers=4,
     dataset=dict(
         type=dataset_type,
@@ -313,7 +313,7 @@ val_dataloader = test_dataloader
 
 test_evaluator = dict(
     ann_file=data_root+'/nuscenes_map_infos_temporal_val.pkl',
-    map_ann_file=data_root+'/nuscenes_map_anns_val.pkl',
+    # map_ann_file=data_root+'/nuscenes_map_anns_val.pkl',
     backend_args=None,
     data_root=data_root,
     metric='bbox',

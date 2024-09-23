@@ -58,8 +58,8 @@ class BaseTransform(BaseModule):
     def create_frustum(self,fH,fW,img_metas):
         # iH, iW = self.image_size
         # fH, fW = self.feature_size
-        iH = img_metas[0]['img_shape'][0][0]
-        iW = img_metas[0]['img_shape'][0][1]
+        iH = img_metas[0]['pad_shape'][0]
+        iW = img_metas[0]['pad_shape'][1]
         assert iH // self.feat_down_sample == fH
         
         ds = (
@@ -233,23 +233,22 @@ class BaseTransform(BaseModule):
         camera_intrinsics = []
         img_aug_matrix = []
         lidar2ego = []
-
         for img_meta in img_metas:
-            lidar2img.append(img_meta['lidar2img'])
-            camera2ego.append(img_meta['camera2ego'])
-            camera_intrinsics.append(img_meta['camera_intrinsics'])
+            lidar2img.append(torch.stack(img_meta['lidar2img']))
+            camera2ego.append(torch.stack(img_meta['camera2ego']))
+            camera_intrinsics.append(torch.stack(img_meta['cam_intrinsic']))
             img_aug_matrix.append(img_meta['img_aug_matrix'])
             lidar2ego.append(img_meta['lidar2ego'])
-        lidar2img = np.asarray(lidar2img)
-        lidar2img = images.new_tensor(lidar2img)  # (B, N, 4, 4)
-        camera2ego = np.asarray(camera2ego)
-        camera2ego = images.new_tensor(camera2ego)  # (B, N, 4, 4)
-        camera_intrinsics = np.asarray(camera_intrinsics)
-        camera_intrinsics = images.new_tensor(camera_intrinsics)  # (B, N, 4, 4)
+        # lidar2img = np.asarray(lidar2img)
+        lidar2img = torch.stack(lidar2img).to(images.device)  # (B, N, 4, 4)
+        # camera2ego = np.asarray(camera2ego)
+        camera2ego = torch.stack(camera2ego).to(images.device)  # (B, N, 4, 4)
+        # camera_intrinsics = np.asarray(camera_intrinsics)
+        camera_intrinsics = torch.stack(camera_intrinsics).to(images.device)  # (B, N, 4, 4)
         img_aug_matrix = np.asarray(img_aug_matrix)
-        img_aug_matrix = images.new_tensor(img_aug_matrix)  # (B, N, 4, 4)
-        lidar2ego = np.asarray(lidar2ego)
-        lidar2ego = images.new_tensor(lidar2ego)  # (B, N, 4, 4)
+        img_aug_matrix = torch.tensor(img_aug_matrix).to(images.device).to(lidar2img.dtype)  # (B, N, 4, 4)
+        # lidar2ego = np.asarray(lidar2ego)
+        lidar2ego = torch.stack(lidar2ego).to(images.device)  # (B, N, 4, 4)
 
         
         # lidar2cam = torch.linalg.solve(camera2ego, lidar2ego.view(B,1,4,4).repeat(1,N,1,1))

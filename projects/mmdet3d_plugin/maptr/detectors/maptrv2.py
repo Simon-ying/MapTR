@@ -89,7 +89,6 @@ class MapTRv2(MVXTwoStageDetector):
             return None
         if self.with_img_neck:
             img_feats = self.img_neck(img_feats)
-
         img_feats_reshaped = []
         for img_feat in img_feats:
             BN, C, H, W = img_feat.size()
@@ -247,8 +246,7 @@ class MapTRv2(MVXTwoStageDetector):
         if self.modality == 'fusion' and 'points' in batch_inputs_dict:
             points = batch_inputs_dict['points']
             lidar_feat = self.extract_lidar_feat(points)
-        
-        img = batch_inputs_dict.get('img', None)
+        img = batch_inputs_dict.get('imgs', None)
         len_queue = img.size(1)
         prev_img = img[:, :-1, ...]
         img = img[:, -1, ...]
@@ -258,7 +256,6 @@ class MapTRv2(MVXTwoStageDetector):
 
         prev_img_metas = copy.deepcopy(img_metas)
         prev_bev = self.obtain_history_bev(prev_img, prev_img_metas) if len_queue > 1 else None
-
         img_metas = img_metas[len_queue-1]
         img_feats = self.extract_feat(img=img, img_metas=img_metas)
         losses = dict()
@@ -273,7 +270,7 @@ class MapTRv2(MVXTwoStageDetector):
     
     def predict(self, batch_inputs_dict,
                 batch_data_samples,  **kwargs):
-        img = batch_inputs_dict.get('img', None)
+        img = batch_inputs_dict.get('imgs', None)
         points = batch_inputs_dict.get('points', None)
         assert img.size(0) == 1, "only support batch size = 0 now."
         len_queue = img.size(1)
