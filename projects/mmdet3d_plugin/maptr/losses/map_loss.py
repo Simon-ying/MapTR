@@ -10,7 +10,8 @@ from mmdet.models import weighted_loss
 import mmcv
 import torch.nn.functional as F
 import functools
-
+from mmdet.structures.bbox import bbox_overlaps, bbox_xyxy_to_cxcywh
+from mmdet.models.task_modules.assigners.match_cost import BaseMatchCost
 
 def reduce_loss(loss, reduction):
     """Reduce loss as specified.
@@ -527,6 +528,102 @@ class OrderedPtsL1Cost(object):
         bbox_cost = torch.cdist(bbox_pred, gt_bboxes, p=1)
         return bbox_cost * self.weight
 
+@TASK_UTILS.register_module()
+class CustomBBoxL1Cost(BaseMatchCost):
+    """BBoxL1Cost.
+
+    Note: ``bboxes`` in ``InstanceData`` passed in is of format 'xyxy'
+    and its coordinates are unnormalized.
+
+    Args:
+        box_format (str, optional): 'xyxy' for DETR, 'xywh' for Sparse_RCNN.
+            Defaults to 'xyxy'.
+        weight (Union[float, int]): Cost weight. Defaults to 1.
+    """
+
+    def __init__(self,
+                 box_format: str = 'xyxy',
+                 weight = 1.) -> None:
+        super().__init__(weight=weight)
+        assert box_format in ['xyxy', 'xywh']
+        self.box_format = box_format
+
+    def __call__(self,
+                 pred_bboxes,
+                 gt_bboxes):
+        """Compute match cost.
+
+        Args:
+            pred_instances (:obj:`InstanceData`): ``bboxes`` inside is
+                predicted boxes with unnormalized coordinate
+                (x, y, x, y).
+            gt_instances (:obj:`InstanceData`): ``bboxes`` inside is gt
+                bboxes with unnormalized coordinate (x, y, x, y).
+
+        Returns:
+            Tensor: Match Cost matrix of shape (num_preds, num_gts).
+        """
+
+        # convert box format
+        if self.box_format == 'xywh':
+            gt_bboxes = bbox_xyxy_to_cxcywh(gt_bboxes)
+            pred_bboxes = bbox_xyxy_to_cxcywh(pred_bboxes)
+
+        bbox_cost = torch.cdist(pred_bboxes, gt_bboxes, p=1)
+        return bbox_cost * self.weight
+
+@TASK_UTILS.register_module()
+class CustomIoUCost(BaseMatchCost):
+    """IoUCost.
+
+    Note: ``bboxes`` in ``InstanceData`` passed in is of format 'xyxy'
+    and its coordinates are unnormalized.
+
+    Args:
+        iou_mode (str): iou mode such as 'iou', 'giou'. Defaults to 'giou'.
+        weight (Union[float, int]): Cost weight. Defaults to 1.
+    """
+
+    def __init__(self, iou_mode: str = 'giou', weight = 1.):
+        super().__init__(weight=weight)
+        self.iou_mode = iou_mode
+
+    def __call__(self,
+                 pred_bboxes,
+                 gt_bboxes,
+                 img_meta = None,
+                 **kwargs):
+        """Compute match cost.
+
+        Args:
+            pred_instances (:obj:`InstanceData`): ``bboxes`` inside is
+                predicted boxes with unnormalized coordinate
+                (x, y, x, y).
+            gt_instances (:obj:`InstanceData`): ``bboxes`` inside is gt
+                bboxes with unnormalized coordinate (x, y, x, y).
+            img_meta (Optional[dict]): Image information. Defaults to None.
+
+        Returns:
+            Tensor: Match Cost matrix of shape (num_preds, num_gts).
+        """
+
+        # avoid fp16 overflow
+        if pred_bboxes.dtype == torch.float16:
+            fp16 = True
+            pred_bboxes = pred_bboxes.to(torch.float32)
+        else:
+            fp16 = False
+
+        overlaps = bbox_overlaps(
+            pred_bboxes, gt_bboxes, mode=self.iou_mode, is_aligned=False)
+
+        if fp16:
+            overlaps = overlaps.to(torch.float16)
+
+        # The 1 is a constant that doesn't change the matching, so omitted.
+        iou_cost = -overlaps
+        return iou_cost * self.weight
+    
 @TASK_UTILS.register_module()
 class MyChamferDistanceCost:
     def __init__(self, loss_src_weight=1., loss_dst_weight=1.):

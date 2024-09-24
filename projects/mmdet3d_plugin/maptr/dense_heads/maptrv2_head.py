@@ -10,9 +10,13 @@ from mmengine.model import bias_init_with_prob, xavier_init, constant_init
 from mmdet.models.layers.transformer import inverse_sigmoid
 from mmdet.structures.bbox import bbox_xyxy_to_cxcywh, bbox_cxcywh_to_xyxy
 from mmdet.models.utils import multi_apply
-from mmdet.utils import reduce_mean
 from mmengine.utils import digit_version
 from mmengine.utils.dl_utils import TORCH_VERSION
+from mmengine.structures import InstanceData
+from torch import Tensor
+from typing import Dict, List, Tuple
+from mmdet.utils import (ConfigType, InstanceList, OptInstanceList,
+                         OptMultiConfig, reduce_mean)
 
 def denormalize_3d_pts(pts, pc_range):
     new_pts = pts.clone()
@@ -209,6 +213,8 @@ class MapTRv2Head(DETRHead):
 
         self.loss_seg = MODELS.build(loss_seg)
         self.loss_pv_seg = MODELS.build(loss_pv_seg)
+        sampler_cfg = dict(type='PseudoSampler')
+        self.sampler = TASK_UTILS.build(sampler_cfg)
         
         self._init_layers()
 
@@ -536,9 +542,10 @@ class MapTRv2Head(DETRHead):
         assign_result, order_index = self.assigner.assign(bbox_pred, cls_score, pts_pred,
                                              gt_bboxes, gt_labels, gt_shifts_pts,
                                              gt_bboxes_ignore)
-
-        sampling_result = self.sampler.sample(assign_result, bbox_pred,
-                                              gt_bboxes)
+        gt_instances, pred_instances = InstanceData(
+            bboxes_3d=gt_bboxes), InstanceData(priors=bbox_pred)
+        sampling_result = self.sampler.sample(assign_result, pred_instances,
+                                              gt_instances)
         # pts_sampling_result = self.sampler.sample(assign_result, pts_pred,
         #                                       gt_pts)
 
@@ -555,8 +562,8 @@ class MapTRv2Head(DETRHead):
         label_weights = gt_bboxes.new_ones(num_bboxes)
 
         # bbox targets
-        bbox_targets = torch.zeros_like(bbox_pred)[..., :gt_c]
-        bbox_weights = torch.zeros_like(bbox_pred)
+        bbox_targets = torch.zeros_like(bbox_pred)[..., :gt_c].to(gt_bboxes)
+        bbox_weights = torch.zeros_like(bbox_pred).to(gt_bboxes)
         bbox_weights[pos_inds] = 1.0
 
         # pts targets
@@ -569,7 +576,7 @@ class MapTRv2Head(DETRHead):
         else:
             assigned_shift = order_index[sampling_result.pos_inds, sampling_result.pos_assigned_gt_inds]
         pts_targets = pts_pred.new_zeros((pts_pred.size(0),
-                        pts_pred.size(1), pts_pred.size(2)))
+                        pts_pred.size(1), pts_pred.size(2))).to(gt_bboxes)
         pts_weights = torch.zeros_like(pts_targets)
         pts_weights[pos_inds] = 1.0
 
@@ -934,5 +941,3 @@ class MapTRv2Head(DETRHead):
             ret_list.append([bboxes, scores, labels, pts])
 
         return ret_list
-
-

@@ -4,6 +4,7 @@ from mmdet.models.task_modules.assigners import AssignResult, BaseAssigner
 from mmdet.registry import MODELS
 import torch.nn.functional as F
 from mmdet.structures.bbox import bbox_xyxy_to_cxcywh, bbox_cxcywh_to_xyxy
+from mmengine.structures import InstanceData
 try:
     from scipy.optimize import linear_sum_assignment
 except ImportError:
@@ -173,12 +174,13 @@ class MapTRAssigner(BaseAssigner):
 
         # 2. compute the weighted costs
         # classification and bboxcost.
-        cls_cost = self.cls_cost(cls_pred, gt_labels)
+        gt_instances, pred_instances = InstanceData(
+            labels=gt_labels), InstanceData(scores=cls_pred)
+        cls_cost = self.cls_cost(pred_instances, gt_instances)
         # regression L1 cost
         
         normalized_gt_bboxes = normalize_2d_bbox(gt_bboxes, self.pc_range)
         # normalized_gt_bboxes = gt_bboxes
-        
         reg_cost = self.reg_cost(bbox_pred[:, :4], normalized_gt_bboxes[:, :4])
 
         _, num_orders, num_pts_per_gtline, num_coords = gt_pts.shape

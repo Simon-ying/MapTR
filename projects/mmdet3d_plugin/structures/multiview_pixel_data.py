@@ -43,13 +43,14 @@ class MultiViewPixelData(BaseDataElement):
                 f' {(torch.Tensor, np.ndarray)}'
 
             if self.shape:
-                assert tuple(value.shape[-2:]) == self.shape, (
-                    'The height and width of '
-                    f'values {tuple(value.shape[-2:])} is '
-                    'not consistent with '
-                    'the shape of this '
-                    ':obj:`PixelData` '
-                    f'{self.shape}')
+                if tuple(value.shape[-2:]) != self.shape:
+                    warnings.warn(
+                        'The height and width of '
+                        f'input values {tuple(value.shape[-2:])} is '
+                        'not consistent with '
+                        'the shape of this '
+                        ':obj:`MultiViewPixelData` '
+                        f'{self.shape}')
             assert value.ndim in [
                 2, 3, 4
             ], f'The dim of value must be 2, 3 or 4, but got {value.ndim}'

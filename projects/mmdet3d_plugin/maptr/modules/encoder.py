@@ -58,8 +58,8 @@ class BaseTransform(BaseModule):
     def create_frustum(self,fH,fW,img_metas):
         # iH, iW = self.image_size
         # fH, fW = self.feature_size
-        iH = img_metas[0]['pad_shape'][0]
-        iW = img_metas[0]['pad_shape'][1]
+        iH = img_metas[0]['img_shape'][0]
+        iW = img_metas[0]['img_shape'][1]
         assert iH // self.feat_down_sample == fH
         
         ds = (
@@ -1132,7 +1132,12 @@ class LSSTransform(BaseTransform):
         
         if depth_preds is None:
             return 0
-        
+        if isinstance(depth_labels, list):
+            depth_labels = torch.stack(depth_labels)
+        if depth_labels.dim() == 5:
+            assert depth_labels.shape[2] == 1, "Invalid depth_labels shape"
+            B, N, Q, H, W = depth_labels.shape
+            depth_labels = depth_labels.permute(0, 2, 1, 3, 4).view(B*Q, N, H, W)
         depth_labels = self.get_downsampled_gt_depth(depth_labels)
         depth_preds = depth_preds.permute(0, 1, 3, 4, 2).contiguous().view(-1, self.D)
         # fg_mask = torch.max(depth_labels, dim=1).values > 0.0 # 只计算有深度的前景的深度loss

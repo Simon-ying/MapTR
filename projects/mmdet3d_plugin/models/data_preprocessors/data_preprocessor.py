@@ -192,7 +192,8 @@ class CustomDet3DDataPreprocessor(DetDataPreprocessor):
                                                     batch_pad_shape):
                         data_sample.set_metainfo({
                             'batch_input_shape': batch_input_shape,
-                            'pad_shape': pad_shape
+                            'pad_shape': pad_shape,
+                            'img_shape': pad_shape
                         })
 
                     if self.boxtype2tensor:
@@ -303,7 +304,14 @@ class CustomDet3DDataPreprocessor(DetDataPreprocessor):
             data['inputs']['imgs'] = batch_imgs
 
         data.setdefault('data_samples', None)
-
+        for queue_id, data_samples in data['data_samples'].items():
+            for data_sample in data_samples:
+                if 'gt_depth' in data_sample:
+                    gt_depth = data_sample.gt_depth.get("depth", None)
+                    gt_depth = [gt_depth[:, i, :, :] for i in range(gt_depth.shape[1])]
+                    gt_depth = multiview_img_stack_batch(
+                        gt_depth, self.pad_size_divisor, 0)
+                    data_sample.gt_depth.depth = gt_depth
         return data
 
     def _get_pad_shape(self, data: dict) -> List[Tuple[int, int]]:

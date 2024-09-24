@@ -134,17 +134,17 @@ class MapTRv2(MVXTwoStageDetector):
         depth = outs.pop('depth')
         losses = dict()
         # calculate depth loss
-        gt_depth = [item.gt_instances_3d.get("depths", None) for item in batch_data_samples]
+        gt_depth = [item.gt_depth.get("depth", None) for item in batch_data_samples]
         if not any(x is None for x in gt_depth):
             loss_depth = self.pts_bbox_head.transformer.encoder.get_depth_loss(gt_depth, depth)
             if digit_version(TORCH_VERSION) >= digit_version('1.8'):
                 loss_depth = torch.nan_to_num(loss_depth)
             losses.update(loss_depth=loss_depth)
 
-        gt_bboxes_3d = [item.gt_instances_3d["gt_bboxes_3d"] for item in batch_data_samples]
-        gt_labels_3d = [item.gt_instances_3d["gt_labels_3d"] for item in batch_data_samples]
-        gt_seg_mask = [item.gt_instances_3d["gt_seg_mask"] for item in batch_data_samples]
-        gt_pv_seg_mask = [item.gt_instances_3d["gt_pv_seg_mask"] for item in batch_data_samples]
+        gt_bboxes_3d = [item.gt_instances_3d["bboxes_3d"] for item in batch_data_samples]
+        gt_labels_3d = [item.gt_instances_3d["labels_3d"] for item in batch_data_samples]
+        gt_seg_mask = [item.gt_bev_seg.seg_mask for item in batch_data_samples]
+        gt_pv_seg_mask = [item.gt_pv_seg.pv_seg_mask for item in batch_data_samples]
         loss_inputs = [gt_bboxes_3d, gt_labels_3d, gt_seg_mask, gt_pv_seg_mask, outs]
         losses_pts = self.pts_bbox_head.loss(*loss_inputs, img_metas=img_metas)
         losses.update(losses_pts)
@@ -305,7 +305,7 @@ class MapTRv2(MVXTwoStageDetector):
 
         img = img[:, len_queue-1, ...]
         img_metas = img_metas[len_queue-1]
-        img_feats = self.extract_feat(imgs=img, batch_input_metas=img_metas)
+        img_feats = self.extract_feat(img=img, img_metas=img_metas)
         lidar_feat = None
         if self.modality =='fusion':
             lidar_feat = self.extract_lidar_feat(points)

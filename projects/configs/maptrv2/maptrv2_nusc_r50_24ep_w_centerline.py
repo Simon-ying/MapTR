@@ -200,10 +200,10 @@ model = dict(
         assigner=dict(
             type='mmdet.MapTRAssigner',
             cls_cost=dict(type='mmdet.FocalLossCost', weight=2.0),
-            reg_cost=dict(type='mmdet.BBoxL1Cost', weight=0.0, box_format='xywh'),
+            reg_cost=dict(type='mmdet.CustomBBoxL1Cost', weight=0.0, box_format='xywh'),
             # reg_cost=dict(type='BBox3DL1Cost', weight=0.25),
             # iou_cost=dict(type='IoUCost', weight=1.0), # Fake cost. This is just to make it compatible with DETR head.
-            iou_cost=dict(type='mmdet.IoUCost', iou_mode='giou', weight=0.0),
+            iou_cost=dict(type='mmdet.CustomIoUCost', iou_mode='giou', weight=0.0),
             pts_cost=dict(type='mmdet.OrderedPtsL1Cost', 
                       weight=5),
             pc_range=point_cloud_range))))
@@ -227,7 +227,8 @@ train_pipeline = [
         type='CustomPack3DDetInputs',
         keys=[
             'img', 'points', 'gt_depth'
-        ])
+        ],
+        pad_size_divisor=32)
 ]
 
 test_pipeline = [
@@ -244,7 +245,8 @@ test_pipeline = [
         type='CustomPack3DDetInputs',
         keys=[
             'img', 'points', 'gt_depth'
-        ])
+        ],
+        pad_size_divisor=32)
 ]
 
 train_dataloader = dict(
@@ -349,7 +351,7 @@ param_scheduler = [
 train_cfg = dict(
     type='EpochBasedTrainLoop',
     max_epochs=num_epochs,
-    val_interval=1)
+    val_interval=24)
 val_cfg = dict(type='ValLoop')
 test_cfg = dict(type='TestLoop')
 find_unused_parameters = False
